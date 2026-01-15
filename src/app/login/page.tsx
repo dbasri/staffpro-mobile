@@ -26,7 +26,7 @@ export default function LoginPage() {
                 <FlameKindling className="h-8 w-8 text-primary" />
             </div>
             <CardTitle className="text-3xl font-bold tracking-tight">StaffPro Mobile</CardTitle>
-            <CardDescription>Secure access to your corporate web applications.</CardDescription>
+            <CardDescription>Access must be enabled by a StaffPro Administrator.</CardDescription>
           </CardHeader>
           <CardContent>
             <LoginForm />
