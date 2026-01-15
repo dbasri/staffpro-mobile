@@ -26,7 +26,7 @@ export default function Home() {
 
   return (
     <main>
-      <WebView url="https://en.wikipedia.org/wiki/Mobile_application" />
+      <WebView url="https://mystaffpro.com/v6/m_mobile" />
     </main>
   );
 }
