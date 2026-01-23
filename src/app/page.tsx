@@ -130,6 +130,32 @@ function MainApp() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // IMPORTANT: Always verify the origin of the message for security.
+      if (event.origin !== "https://mystaffpro.com") {
+        console.warn(`Message from untrusted origin ignored: ${event.origin}`);
+        return;
+      }
+
+      console.log("Message received from iframe:", event.data);
+      // Here you can process the received JSON data.
+      // For example, you could store it in state, update user context, etc.
+      // const serverData = event.data;
+      // if (serverData && serverData.sessionToken) {
+      //   // Do something with the token
+      // }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    // Cleanup function to remove the event listener when the component unmounts.
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, []); // Empty dependency array ensures this effect runs once on mount.
+
+
+  useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.replace('/login');
     }
