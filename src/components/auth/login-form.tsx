@@ -1,18 +1,96 @@
 'use client';
 
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { useRouter } from 'next/navigation';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { KeyRound, ShieldCheck, Mail } from 'lucide-react';
+
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
-import { KeyRound, ShieldCheck } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Input } from '@/components/ui/input';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+
+const VerificationSchema = z.object({
+  email: z.string().email({ message: 'Please enter a valid email address.' }),
+});
+
+type VerificationFormValues = z.infer<typeof VerificationSchema>;
 
 export function LoginForm() {
   const { login } = useAuth();
   const router = useRouter();
+  const [showVerificationForm, setShowVerificationForm] = useState(false);
+
+  const form = useForm<VerificationFormValues>({
+    resolver: zodResolver(VerificationSchema),
+    defaultValues: {
+      email: '',
+    },
+  });
 
   const handleLogin = async () => {
     await login();
     router.push('/');
   };
+
+  const handleVerificationSubmit = (data: VerificationFormValues) => {
+    // In a real app, you would call an API to send the code.
+    // For this prototype, we'll just navigate.
+    router.push(`/?verification=true&email=${encodeURIComponent(data.email)}`);
+  };
+
+  if (showVerificationForm) {
+    return (
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(handleVerificationSubmit)}
+          className="space-y-4 pt-6"
+        >
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email Address</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="you@example.com"
+                      {...field}
+                      className="pl-10"
+                    />
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="space-y-2">
+            <Button type="submit" className="w-full">
+              Send Verification Code
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => setShowVerificationForm(false)}
+            >
+              Back to login options
+            </Button>
+          </div>
+        </form>
+      </Form>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -21,7 +99,11 @@ export function LoginForm() {
           <KeyRound className="mr-2" />
           Sign in with a passkey
         </Button>
-        <Button variant="outline" className="w-full" onClick={handleLogin}>
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => setShowVerificationForm(true)}
+        >
           <ShieldCheck className="mr-2" />
           Use a verification code
         </Button>
