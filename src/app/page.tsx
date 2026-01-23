@@ -37,6 +37,7 @@ function VerificationScreen() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const email = searchParams.get('email');
+  const { login } = useAuth();
 
   const form = useForm<CodeVerificationFormValues>({
     resolver: zodResolver(CodeVerificationSchema),
@@ -45,19 +46,24 @@ function VerificationScreen() {
     },
   });
 
-  if (!email) {
-    // This shouldn't happen if navigated from the form, but handle it just in case.
-    useEffect(() => {
+  useEffect(() => {
+    if (!email) {
       router.replace('/login');
-    }, [router]);
-    return null;
-  }
+    }
+  }, [email, router]);
 
-  const handleVerifySubmit = (data: CodeVerificationFormValues) => {
+  const handleVerifySubmit = async (data: CodeVerificationFormValues) => {
+    // First, log the user in to create the session
+    await login();
+    // Then, redirect to the main page with the correct query params
     const newSearchParams = new URLSearchParams(searchParams.toString());
     newSearchParams.set('code', data.code);
-    router.push(`/?${newSearchParams.toString()}`);
+    router.replace(`/?${newSearchParams.toString()}`);
   };
+
+  if (!email) {
+    return null;
+  }
 
   return (
     <div className="flex h-screen w-full flex-col items-center justify-center bg-background p-4">
@@ -164,15 +170,28 @@ function MainApp() {
 // https://nextjs.org/docs/app/building-your-application/rendering/client-components#suspense-and-usesearchparams
 function HomePageContent() {
   const searchParams = useSearchParams();
+  const { isAuthenticated } = useAuth();
   const isVerificationFlow = searchParams.get('verification') === 'true';
-  const hasCode = searchParams.has('code');
+  const hasSubmittedCode = searchParams.has('code');
 
-  // Show verification screen only if it's the verification flow AND a code has NOT been submitted yet.
-  if (isVerificationFlow && !hasCode) {
+  // If it's the verification flow AND a code has been submitted, the user should be logged in.
+  // We show the MainApp. The logic inside MainApp will handle the authenticated state.
+  if (isVerificationFlow && hasSubmittedCode) {
+    return <MainApp />;
+  }
+
+  // If it's the verification flow but NO code has been submitted yet, show the verification screen.
+  if (isVerificationFlow && !hasSubmittedCode) {
     return <VerificationScreen />;
   }
 
-  // In all other cases (passkey login, or verification flow with code submitted), show the MainApp.
+  // If the user is authenticated through other means (like passkey), show the main app.
+  if (isAuthenticated) {
+    return <MainApp />;
+  }
+  
+  // By default, if none of the above conditions are met, we can decide what to show.
+  // It's safest to show the MainApp and let its internal logic handle redirection if not authenticated.
   return <MainApp />;
 }
 
