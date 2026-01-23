@@ -2,9 +2,13 @@
 
 import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+
 import { useAuth } from '@/hooks/use-auth';
 import WebView from '@/components/web-view';
-import { Loader2, MailCheck } from 'lucide-react';
+import { Loader2, MailCheck, ShieldCheck } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -13,11 +17,33 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+
+const CodeVerificationSchema = z.object({
+  code: z.string().min(1, { message: 'Please enter the code.' }),
+});
+
+type CodeVerificationFormValues = z.infer<typeof CodeVerificationSchema>;
 
 function VerificationScreen() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const email = searchParams.get('email');
+
+  const form = useForm<CodeVerificationFormValues>({
+    resolver: zodResolver(CodeVerificationSchema),
+    defaultValues: {
+      code: '',
+    },
+  });
 
   if (!email) {
     // This shouldn't happen if navigated from the form, but handle it just in case.
@@ -26,6 +52,12 @@ function VerificationScreen() {
     }, [router]);
     return null;
   }
+
+  const handleVerifySubmit = (data: CodeVerificationFormValues) => {
+    const newSearchParams = new URLSearchParams(searchParams.toString());
+    newSearchParams.set('code', data.code);
+    router.push(`/?${newSearchParams.toString()}`);
+  };
 
   return (
     <div className="flex h-screen w-full flex-col items-center justify-center bg-background p-4">
@@ -40,13 +72,46 @@ function VerificationScreen() {
             <span className="font-semibold text-foreground">{email}</span>.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col items-center gap-4">
-          <p className="text-center text-sm text-muted-foreground">
-            (This is a prototype. No email was actually sent.)
-          </p>
-          <Button onClick={() => router.push('/login')} variant="outline">
-            Back to Login
-          </Button>
+        <CardContent>
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(handleVerifySubmit)}
+              className="space-y-4"
+            >
+              <FormField
+                control={form.control}
+                name="code"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Verification Code</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <ShieldCheck className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          placeholder="XXXXXX"
+                          {...field}
+                          className="pl-10 text-center tracking-[0.5em]"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="space-y-2 pt-2">
+                <Button type="submit" className="w-full">
+                  Verify Code
+                </Button>
+                <Button
+                  onClick={() => router.push('/login')}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Back to Login
+                </Button>
+              </div>
+            </form>
+          </Form>
         </CardContent>
       </Card>
     </div>
