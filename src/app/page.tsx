@@ -54,7 +54,7 @@ function VerificationScreen() {
 }
 
 function MainApp() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -72,8 +72,15 @@ function MainApp() {
   }
 
   return (
-    <main>
+    <main className="relative h-screen">
       <WebView url="https://mystaffpro.com/v6/m_mobile" />
+      <Button
+        onClick={() => logout()}
+        className="absolute bottom-4 right-4 z-20 shadow-lg"
+        variant="destructive"
+      >
+        Restart
+      </Button>
     </main>
   );
 }
