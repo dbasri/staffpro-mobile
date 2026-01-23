@@ -121,6 +121,7 @@ function VerificationScreen() {
 function MainApp() {
   const { isAuthenticated, isLoading, logout } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -136,9 +137,17 @@ function MainApp() {
     );
   }
 
+  const baseUrl = "https://mystaffpro.com/v6/m_mobile";
+  let webViewUrl = baseUrl;
+  const paramsString = searchParams.toString();
+
+  if (paramsString) {
+    webViewUrl = `${baseUrl}?${paramsString}`;
+  }
+
   return (
     <main className="relative h-screen">
-      <WebView url="https://mystaffpro.com/v6/m_mobile" />
+      <WebView url={webViewUrl} />
       <Button
         onClick={() => logout()}
         className="absolute bottom-4 right-4 z-20 shadow-lg"
@@ -156,11 +165,14 @@ function MainApp() {
 function HomePageContent() {
   const searchParams = useSearchParams();
   const isVerificationFlow = searchParams.get('verification') === 'true';
+  const hasCode = searchParams.has('code');
 
-  if (isVerificationFlow) {
+  // Show verification screen only if it's the verification flow AND a code has NOT been submitted yet.
+  if (isVerificationFlow && !hasCode) {
     return <VerificationScreen />;
   }
 
+  // In all other cases (passkey login, or verification flow with code submitted), show the MainApp.
   return <MainApp />;
 }
 
