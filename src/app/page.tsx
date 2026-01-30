@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
 import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
 import WebView from '@/components/web-view';
 import { Loader2, MailCheck, ShieldCheck } from 'lucide-react';
 import {
@@ -32,6 +33,14 @@ const CodeVerificationSchema = z.object({
 });
 
 type CodeVerificationFormValues = z.infer<typeof CodeVerificationSchema>;
+
+interface StaffProMessage {
+  status: 'success' | 'fail';
+  email: string;
+  name: string;
+  session: string;
+  purpose: string;
+}
 
 function VerificationScreen() {
   const searchParams = useSearchParams();
@@ -128,6 +137,7 @@ function MainApp() {
   const { isAuthenticated, isLoading, logout } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -137,13 +147,28 @@ function MainApp() {
         return;
       }
 
-      console.log("Message received from iframe:", event.data);
-      // Here you can process the received JSON data.
-      // For example, you could store it in state, update user context, etc.
-      // const serverData = event.data;
-      // if (serverData && serverData.sessionToken) {
-      //   // Do something with the token
-      // }
+      // Ensure the data has a status property before processing
+      if (event.data && typeof event.data === 'object' && 'status' in event.data) {
+        const serverData = event.data as StaffProMessage;
+
+        if (serverData.status === 'success') {
+          console.log("Authentication success. Data received:", serverData);
+          // You can now use the session data, for example, by storing it in a context.
+        } else if (serverData.status === 'fail') {
+          console.error("Authentication failed:", serverData.purpose);
+          toast({
+            variant: "destructive",
+            title: "Authentication Failed",
+            description: serverData.purpose || "An unknown error occurred on the server.",
+          });
+          // Log out and redirect to login page after a short delay
+          setTimeout(() => {
+            logout();
+          }, 2000);
+        }
+      } else {
+         console.log("Message received from iframe (unstructured):", event.data);
+      }
     };
 
     window.addEventListener('message', handleMessage);
@@ -152,7 +177,7 @@ function MainApp() {
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, []); // Empty dependency array ensures this effect runs once on mount.
+  }, [logout, toast]);
 
 
   useEffect(() => {
