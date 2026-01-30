@@ -27,6 +27,8 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import type { UserSession } from '@/types/session';
+
 
 const CodeVerificationSchema = z.object({
   code: z.string().min(1, { message: 'Please enter the code.' }),
@@ -34,19 +36,10 @@ const CodeVerificationSchema = z.object({
 
 type CodeVerificationFormValues = z.infer<typeof CodeVerificationSchema>;
 
-interface StaffProMessage {
-  status: 'success' | 'fail';
-  email: string;
-  name: string;
-  session: string;
-  purpose: string;
-}
-
 function VerificationScreen() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const email = searchParams.get('email');
-  const { login } = useAuth();
 
   const form = useForm<CodeVerificationFormValues>({
     resolver: zodResolver(CodeVerificationSchema),
@@ -61,10 +54,9 @@ function VerificationScreen() {
     }
   }, [email, router]);
 
-  const handleVerifySubmit = async (data: CodeVerificationFormValues) => {
-    // First, log the user in to create the session
-    await login();
-    // Then, redirect to the main page with the correct query params
+  const handleVerifySubmit = (data: CodeVerificationFormValues) => {
+    // Redirect to the main page with the correct query params
+    // The main app will handle the login after receiving the postMessage
     const newSearchParams = new URLSearchParams(searchParams.toString());
     newSearchParams.set('code', data.code);
     router.replace(`/?${newSearchParams.toString()}`);
@@ -134,7 +126,7 @@ function VerificationScreen() {
 }
 
 function MainApp() {
-  const { isAuthenticated, isLoading, logout } = useAuth();
+  const { isAuthenticated, isLoading, logout, login } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -149,11 +141,12 @@ function MainApp() {
 
       // Ensure the data has a status property before processing
       if (event.data && typeof event.data === 'object' && 'status' in event.data) {
-        const serverData = event.data as StaffProMessage;
+        const serverData = event.data as UserSession;
 
         if (serverData.status === 'success') {
           console.log("Authentication success. Data received:", serverData);
-          // You can now use the session data, for example, by storing it in a context.
+          // This is the "next step": save the session data.
+          login(serverData);
         } else if (serverData.status === 'fail') {
           console.error("Authentication failed:", serverData.purpose);
           toast({
@@ -177,7 +170,7 @@ function MainApp() {
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, [logout, toast]);
+  }, [logout, toast, login]);
 
 
   useEffect(() => {

@@ -26,7 +26,7 @@ const VerificationSchema = z.object({
 type VerificationFormValues = z.infer<typeof VerificationSchema>;
 
 export function LoginForm() {
-  const { login } = useAuth();
+  const { passkeyLogin } = useAuth();
   const router = useRouter();
   const [showVerificationForm, setShowVerificationForm] = useState(false);
 
@@ -38,7 +38,7 @@ export function LoginForm() {
   });
 
   const handleLogin = async () => {
-    await login();
+    await passkeyLogin();
     router.push('/');
   };
 
