@@ -135,13 +135,11 @@ function MainApp() {
     const handleMessage = (event: MessageEvent) => {
       // IMPORTANT: Always verify the origin of the message for security.
       // In a real app, this should be a specific, trusted URL.
-      // For development, we can be more lenient, but production code should be strict.
       if (event.origin !== "https://mystaffpro.com") {
         console.warn(`Message from untrusted origin ignored: ${event.origin}`);
         return;
       }
       
-      // Ensure the data has a status property before processing
       if (event.data && typeof event.data === 'object' && 'status' in event.data) {
         const serverData = event.data as UserSession;
 
@@ -155,9 +153,9 @@ function MainApp() {
             title: "Authentication Failed",
             description: serverData.purpose || "An unknown error occurred on the server.",
           });
-          // Log out and redirect to login page after a short delay
           setTimeout(() => {
             logout();
+            router.replace('/login');
           }, 2000);
         }
       } else {
@@ -167,29 +165,22 @@ function MainApp() {
 
     window.addEventListener('message', handleMessage);
 
-    // Cleanup function to remove the event listener when the component unmounts.
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, [logout, toast, login]);
+  }, [logout, toast, login, router]);
 
 
-  // We are in a verification flow if 'verification' is a query param.
-  // This is a broader check to prevent premature redirects.
   const isVerifying = searchParams.has('verification');
 
   useEffect(() => {
-    // Only redirect to login if we are NOT authenticated AND we are NOT in the middle
-    // of a verification flow. This allows the WebView to load and send the postMessage.
     if (!isLoading && !isAuthenticated && !isVerifying) {
       router.replace('/login');
     }
   }, [isAuthenticated, isLoading, router, isVerifying]);
 
 
-  // Show a loader if we are in the initial loading state OR if we are in the process of
-  // verifying but are not yet authenticated.
-  if (isLoading || (!isAuthenticated && isVerifying)) {
+  if (isLoading || (!isAuthenticated && isVerifying && !searchParams.has('code'))) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -197,20 +188,18 @@ function MainApp() {
     );
   }
 
-
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
   let webViewUrl = baseUrl;
-  const paramsString = searchParams.toString();
   
-  // Only append params if the user is authenticated OR if they are in the verification flow.
-  if (isAuthenticated || isVerifying) {
+  // Only append params if we are in the verification flow.
+  // An already authenticated user should just load the base URL.
+  if (isVerifying) {
+    const paramsString = searchParams.toString();
     if (paramsString) {
       webViewUrl = `${baseUrl}?${paramsString}`;
     }
   }
 
-  // To help you debug, we'll log the exact URL being sent to the WebView.
-  // You can check this in your browser's developer console.
   console.log("Loading WebView with URL:", webViewUrl);
 
 
@@ -228,34 +217,20 @@ function MainApp() {
   );
 }
 
-
-// Next.js Suspense and useSearchParams work together.
-// We wrap the component tree in a Suspense boundary.
-// https://nextjs.org/docs/app/building-your-application/rendering/client-components#suspense-and-usesearchparams
 function HomePageContent() {
   const searchParams = useSearchParams();
   const { isAuthenticated } = useAuth();
-  const isVerificationFlow = searchParams.get('verification') === 'true';
-  const hasSubmittedCode = searchParams.has('code');
+  
+  const isVerificationFlow = searchParams.has('verification');
+  const hasCode = searchParams.has('code');
 
-  // If it's the verification flow AND a code has been submitted, the user should be logged in.
-  // We show the MainApp. The logic inside MainApp will handle the authenticated state.
-  if (isVerificationFlow && hasSubmittedCode) {
-    return <MainApp />;
-  }
-
-  // If it's the verification flow but NO code has been submitted yet, show the verification screen.
-  if (isVerificationFlow && !hasSubmittedCode) {
+  // If we've started verification but haven't submitted a code yet, show the verification form.
+  if (isVerificationFlow && !hasCode) {
     return <VerificationScreen />;
   }
 
-  // If the user is authenticated through other means (like passkey), show the main app.
-  if (isAuthenticated) {
-    return <MainApp />;
-  }
-  
-  // By default, if none of the above conditions are met, we can decide what to show.
-  // It's safest to show the MainApp and let its internal logic handle redirection if not authenticated.
+  // Otherwise (if authenticated, or if verifying with a code), show the main app.
+  // The MainApp component has its own logic to handle redirects if not authenticated.
   return <MainApp />;
 }
 
