@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -25,6 +25,8 @@ const VerificationSchema = z.object({
 
 type VerificationFormValues = z.infer<typeof VerificationSchema>;
 
+const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
+
 export function LoginForm() {
   const { passkeyLogin } = useAuth();
   const router = useRouter();
@@ -37,14 +39,33 @@ export function LoginForm() {
     },
   });
 
+  // Use an effect to set the email from localStorage when the form is shown
+  useEffect(() => {
+    if (showVerificationForm) {
+      try {
+        const storedEmail = localStorage.getItem(EMAIL_STORAGE_KEY);
+        if (storedEmail) {
+          form.setValue('email', storedEmail);
+        }
+      } catch (error) {
+        console.error('Could not access local storage for email:', error);
+      }
+    }
+  }, [showVerificationForm, form]);
+
   const handleLogin = async () => {
     await passkeyLogin();
     router.push('/');
   };
 
   const handleVerificationSubmit = (data: VerificationFormValues) => {
-    // In a real app, you would call an API to send the code.
-    // For this prototype, we'll just navigate.
+    try {
+      // Save the email to localStorage for persistence
+      localStorage.setItem(EMAIL_STORAGE_KEY, data.email);
+    } catch (error) {
+      console.error('Could not access local storage to save email:', error);
+    }
+    // Navigate to start the verification process
     router.push(`/?verification=true&email=${encodeURIComponent(data.email)}`);
   };
 
