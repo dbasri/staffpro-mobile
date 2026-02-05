@@ -120,12 +120,12 @@ function MainApp() {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      console.log('--- MESSAGE EVENT RECEIVED ---');
       console.log("Message event received from origin:", event.origin);
 
       // SECURITY: Only accept messages from our trusted server origin.
       if (event.origin !== "https://mystaffpro.com") {
         console.warn(`Message from untrusted origin ignored: ${event.origin}. Expected 'https://mystaffpro.com'.`);
-        // If your server is on a different domain, you must update the check above.
         return;
       }
       
@@ -133,12 +133,11 @@ function MainApp() {
 
       if (event.data && typeof event.data === 'object' && 'status' in event.data) {
         const serverData = event.data as UserSession;
+        console.log('Server data parsed:', serverData);
 
         if (serverData.status === 'success') {
           console.log("Authentication SUCCESS. Storing session and redirecting.");
           login(serverData);
-          // On success, we navigate to the home page, which removes the `?verification` query param
-          // and causes the verification overlay to disappear.
           router.replace('/');
         } else if (serverData.status === 'fail') {
           console.error("Authentication FAIL. Reason:", serverData.purpose);
@@ -147,7 +146,6 @@ function MainApp() {
             title: "Authentication Failed",
             description: serverData.purpose || "An unknown error occurred on the server.",
           });
-          // Give user time to read toast before redirecting
           setTimeout(() => {
             logout();
             router.replace('/login');
@@ -157,10 +155,12 @@ function MainApp() {
          console.log("Received message, but data format is not recognized:", event.data);
       }
     };
-
+    
+    console.log('Adding window message event listener.');
     window.addEventListener('message', handleMessage);
 
     return () => {
+      console.log('Removing window message event listener.');
       window.removeEventListener('message', handleMessage);
     };
   }, [logout, toast, login, router]);
@@ -182,24 +182,18 @@ function MainApp() {
     );
   }
 
-  // Determine if we should show the verification overlay
   const showVerificationOverlay = isVerifying && !isAuthenticated && emailForVerification;
 
-  // --- URL Construction ---
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
   let webViewUrl = baseUrl;
 
   if (isAuthenticated && user) {
-     // If the user is properly authenticated, pass their session info.
      webViewUrl = `${baseUrl}?session=${user.session}&email=${user.email}`;
   } else if (isVerifying) {
-    // This is the verification flow.
     const params = new URLSearchParams();
     params.set('verification', 'true');
     if(emailForVerification) params.set('email', emailForVerification);
     
-    // This will trigger the server to send the email on first load.
-    // When the user submits the code, this will send it for verification.
     if (submittedCode) {
       params.set('code', submittedCode);
     }
@@ -250,14 +244,10 @@ function HomePageContent() {
     );
   }
 
-  // If we are authenticated OR in the process of verifying, show the main app.
-  // MainApp has the internal logic to handle all these states.
   if (isAuthenticated || isVerificationFlow) {
     return <MainApp />;
   }
   
-  // If not authenticated and not trying to verify, we shouldn't be here. Go to login.
-  // This is a fallback, MainApp has a similar redirect.
   if (typeof window !== 'undefined' && window.location.pathname === '/') {
     window.location.href = '/login';
   }
