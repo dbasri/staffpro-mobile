@@ -120,22 +120,28 @@ function MainApp() {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // IMPORTANT: Adjust this origin to your actual server URL for security
+      console.log("Message event received from origin:", event.origin);
+
+      // SECURITY: Only accept messages from our trusted server origin.
       if (event.origin !== "https://mystaffpro.com") {
-        console.warn(`Message from untrusted origin ignored: ${event.origin}`);
+        console.warn(`Message from untrusted origin ignored: ${event.origin}. Expected 'https://mystaffpro.com'.`);
+        // If your server is on a different domain, you must update the check above.
         return;
       }
       
+      console.log("Message data received:", event.data);
+
       if (event.data && typeof event.data === 'object' && 'status' in event.data) {
         const serverData = event.data as UserSession;
 
         if (serverData.status === 'success') {
-          console.log("Authentication success. Data received:", serverData);
+          console.log("Authentication SUCCESS. Storing session and redirecting.");
           login(serverData);
-          // On success, we navigate to the home page, which removes the overlay
+          // On success, we navigate to the home page, which removes the `?verification` query param
+          // and causes the verification overlay to disappear.
           router.replace('/');
         } else if (serverData.status === 'fail') {
-          console.error("Authentication failed:", serverData.purpose);
+          console.error("Authentication FAIL. Reason:", serverData.purpose);
           toast({
             variant: "destructive",
             title: "Authentication Failed",
@@ -148,7 +154,7 @@ function MainApp() {
           }, 3000);
         }
       } else {
-         console.log("Message received from iframe (unstructured):", event.data);
+         console.log("Received message, but data format is not recognized:", event.data);
       }
     };
 
