@@ -190,9 +190,7 @@ function MainApp() {
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
   let webViewUrl = baseUrl;
 
-  if (isAuthenticated && user) {
-     webViewUrl = `${baseUrl}?session=${user.session}&email=${user.email}`;
-  } else if (isVerifying) {
+  if (isVerifying) {
     const params = new URLSearchParams();
     params.set('verification', 'true');
     if(emailForVerification) params.set('email', emailForVerification);
@@ -202,6 +200,8 @@ function MainApp() {
     }
     
     webViewUrl = `${baseUrl}?${params.toString()}`;
+  } else if (isAuthenticated && user) {
+     webViewUrl = `${baseUrl}?session=${user.session}&email=${user.email}`;
   }
   
   console.log("Loading WebView with URL:", webViewUrl);
