@@ -134,18 +134,19 @@ function MainApp() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // IMPORTANT: Always verify the origin of the message for security.
+      // In a real app, this should be a specific, trusted URL.
+      // For development, we can be more lenient, but production code should be strict.
       if (event.origin !== "https://mystaffpro.com") {
         console.warn(`Message from untrusted origin ignored: ${event.origin}`);
         return;
       }
-
+      
       // Ensure the data has a status property before processing
       if (event.data && typeof event.data === 'object' && 'status' in event.data) {
         const serverData = event.data as UserSession;
 
         if (serverData.status === 'success') {
           console.log("Authentication success. Data received:", serverData);
-          // This is the "next step": save the session data.
           login(serverData);
         } else if (serverData.status === 'fail') {
           console.error("Authentication failed:", serverData.purpose);
@@ -173,21 +174,21 @@ function MainApp() {
   }, [logout, toast, login]);
 
 
-  useEffect(() => {
-    // We are in the middle of a code verification flow if these params are present.
-    const isVerifying = searchParams.has('code') && searchParams.has('verification');
+  // We are in a verification flow if 'verification' is a query param.
+  // This is a broader check to prevent premature redirects.
+  const isVerifying = searchParams.has('verification');
 
+  useEffect(() => {
     // Only redirect to login if we are NOT authenticated AND we are NOT in the middle
     // of a verification flow. This allows the WebView to load and send the postMessage.
     if (!isLoading && !isAuthenticated && !isVerifying) {
       router.replace('/login');
     }
-  }, [isAuthenticated, isLoading, router, searchParams]);
+  }, [isAuthenticated, isLoading, router, isVerifying]);
 
-  const isVerifying = searchParams.has('code') && searchParams.has('verification');
 
   // Show a loader if we are in the initial loading state OR if we are in the process of
-  // verifying a code but are not yet authenticated.
+  // verifying but are not yet authenticated.
   if (isLoading || (!isAuthenticated && isVerifying)) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -202,7 +203,6 @@ function MainApp() {
   const paramsString = searchParams.toString();
   
   // Only append params if the user is authenticated OR if they are in the verification flow.
-  // This ensures the correct URL is loaded.
   if (isAuthenticated || isVerifying) {
     if (paramsString) {
       webViewUrl = `${baseUrl}?${paramsString}`;
@@ -227,6 +227,7 @@ function MainApp() {
     </main>
   );
 }
+
 
 // Next.js Suspense and useSearchParams work together.
 // We wrap the component tree in a Suspense boundary.
