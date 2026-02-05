@@ -132,8 +132,8 @@ function MainApp() {
         if (serverData.status === 'success') {
           console.log("Authentication success. Data received:", serverData);
           login(serverData);
-          // On success, we no longer need the verification code
-          setSubmittedCode(null); 
+          // On success, we navigate to the home page, which removes the overlay
+          router.replace('/');
         } else if (serverData.status === 'fail') {
           console.error("Authentication failed:", serverData.purpose);
           toast({
@@ -183,24 +183,20 @@ function MainApp() {
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
   let webViewUrl = baseUrl;
 
-  // If authenticated, we may not need any params, depending on server logic
   if (isAuthenticated && user) {
-     // You might want to pass the session to the URL if the server needs it
-     // For now, just load the base URL
+     // If the user is properly authenticated, pass their session info.
      webViewUrl = `${baseUrl}?session=${user.session}&email=${user.email}`;
   } else if (isVerifying) {
-    // This is the verification flow
+    // This is the verification flow.
     const params = new URLSearchParams();
     if(emailForVerification) params.set('email', emailForVerification);
     
-    // Only add the code if it has been submitted by the user
+    // This will trigger the server to send the email on first load.
+    // When the user submits the code, this will send it for verification.
     if (submittedCode) {
       params.set('code', submittedCode);
     }
     
-    // Always include verification=true to let the server know the context
-    params.set('verification', 'true');
-
     webViewUrl = `${baseUrl}?${params.toString()}`;
   }
   
