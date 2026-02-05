@@ -174,12 +174,21 @@ function MainApp() {
 
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    // We are in the middle of a code verification flow if these params are present.
+    const isVerifying = searchParams.has('code') && searchParams.has('verification');
+
+    // Only redirect to login if we are NOT authenticated AND we are NOT in the middle
+    // of a verification flow. This allows the WebView to load and send the postMessage.
+    if (!isLoading && !isAuthenticated && !isVerifying) {
       router.replace('/login');
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, router, searchParams]);
 
-  if (isLoading || !isAuthenticated) {
+  const isVerifying = searchParams.has('code') && searchParams.has('verification');
+
+  // Show a loader if we are in the initial loading state OR if we are in the process of
+  // verifying a code but are not yet authenticated.
+  if (isLoading || (!isAuthenticated && isVerifying)) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -187,13 +196,23 @@ function MainApp() {
     );
   }
 
+
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
   let webViewUrl = baseUrl;
   const paramsString = searchParams.toString();
-
-  if (paramsString) {
-    webViewUrl = `${baseUrl}?${paramsString}`;
+  
+  // Only append params if the user is authenticated OR if they are in the verification flow.
+  // This ensures the correct URL is loaded.
+  if (isAuthenticated || isVerifying) {
+    if (paramsString) {
+      webViewUrl = `${baseUrl}?${paramsString}`;
+    }
   }
+
+  // To help you debug, we'll log the exact URL being sent to the WebView.
+  // You can check this in your browser's developer console.
+  console.log("Loading WebView with URL:", webViewUrl);
+
 
   return (
     <main className="relative h-screen">
