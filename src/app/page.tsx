@@ -168,7 +168,7 @@ function MainApp() {
     }
   }, [isAuthenticated, isLoading, router, isVerifying]);
 
-  if (isLoading) {
+  if (isLoading && !isVerifying) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -216,7 +216,7 @@ function MainApp() {
         />
       )}
 
-      <WebView url={webViewUrl} />
+      {(isVerifying || isAuthenticated) && <WebView url={webViewUrl} />}
       
       {isAuthenticated && (
         <Button
@@ -252,7 +252,7 @@ function HomePageContent() {
   
   // If not authenticated and not trying to verify, we shouldn't be here. Go to login.
   // This is a fallback, MainApp has a similar redirect.
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && window.location.pathname === '/') {
     window.location.href = '/login';
   }
 
