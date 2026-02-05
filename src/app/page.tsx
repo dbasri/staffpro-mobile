@@ -120,6 +120,9 @@ function MainApp() {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      // If your developer tools are open, the browser will pause execution here.
+      debugger;
+
       console.log('--- MESSAGE EVENT RECEIVED ---');
       console.log("Message event received from origin:", event.origin);
 
