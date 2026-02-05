@@ -248,9 +248,10 @@ function HomePageContent() {
     return <MainApp />;
   }
   
-  if (typeof window !== 'undefined' && window.location.pathname === '/') {
-    window.location.href = '/login';
-  }
+  // This was causing a redirect loop. It's safer to handle this in useEffect.
+  // if (typeof window !== 'undefined' && window.location.pathname === '/') {
+  //   window.location.href = '/login';
+  // }
 
   return null;
 }
