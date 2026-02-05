@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -36,38 +36,26 @@ const CodeVerificationSchema = z.object({
 
 type CodeVerificationFormValues = z.infer<typeof CodeVerificationSchema>;
 
-function VerificationScreen() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const email = searchParams.get('email');
-
+function CodeVerificationOverlay({
+  email,
+  onSubmitCode,
+  onBack,
+}: {
+  email: string;
+  onSubmitCode: (code: string) => void;
+  onBack: () => void;
+}) {
   const form = useForm<CodeVerificationFormValues>({
     resolver: zodResolver(CodeVerificationSchema),
-    defaultValues: {
-      code: '',
-    },
+    defaultValues: { code: '' },
   });
 
-  useEffect(() => {
-    if (!email) {
-      router.replace('/login');
-    }
-  }, [email, router]);
-
   const handleVerifySubmit = (data: CodeVerificationFormValues) => {
-    // Redirect to the main page with the correct query params
-    // The main app will handle the login after receiving the postMessage
-    const newSearchParams = new URLSearchParams(searchParams.toString());
-    newSearchParams.set('code', data.code);
-    router.replace(`/?${newSearchParams.toString()}`);
+    onSubmitCode(data.code);
   };
 
-  if (!email) {
-    return null;
-  }
-
   return (
-    <div className="flex h-screen w-full flex-col items-center justify-center bg-background p-4">
+    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
@@ -109,11 +97,7 @@ function VerificationScreen() {
                 <Button type="submit" className="w-full">
                   Verify Code
                 </Button>
-                <Button
-                  onClick={() => router.push('/login')}
-                  variant="outline"
-                  className="w-full"
-                >
+                <Button onClick={onBack} variant="outline" className="w-full">
                   Back to Login
                 </Button>
               </div>
@@ -125,16 +109,18 @@ function VerificationScreen() {
   );
 }
 
+
 function MainApp() {
-  const { isAuthenticated, isLoading, logout, login } = useAuth();
+  const { user, isAuthenticated, isLoading, logout, login } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
+  const [submittedCode, setSubmittedCode] = useState<string | null>(null);
+
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // IMPORTANT: Always verify the origin of the message for security.
-      // In a real app, this should be a specific, trusted URL.
+      // IMPORTANT: Adjust this origin to your actual server URL for security
       if (event.origin !== "https://mystaffpro.com") {
         console.warn(`Message from untrusted origin ignored: ${event.origin}`);
         return;
@@ -146,6 +132,8 @@ function MainApp() {
         if (serverData.status === 'success') {
           console.log("Authentication success. Data received:", serverData);
           login(serverData);
+          // On success, we no longer need the verification code
+          setSubmittedCode(null); 
         } else if (serverData.status === 'fail') {
           console.error("Authentication failed:", serverData.purpose);
           toast({
@@ -153,10 +141,11 @@ function MainApp() {
             title: "Authentication Failed",
             description: serverData.purpose || "An unknown error occurred on the server.",
           });
+          // Give user time to read toast before redirecting
           setTimeout(() => {
             logout();
             router.replace('/login');
-          }, 2000);
+          }, 3000);
         }
       } else {
          console.log("Message received from iframe (unstructured):", event.data);
@@ -170,8 +159,8 @@ function MainApp() {
     };
   }, [logout, toast, login, router]);
 
-
   const isVerifying = searchParams.has('verification');
+  const emailForVerification = searchParams.get('email');
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated && !isVerifying) {
@@ -179,8 +168,7 @@ function MainApp() {
     }
   }, [isAuthenticated, isLoading, router, isVerifying]);
 
-
-  if (isLoading || (!isAuthenticated && isVerifying && !searchParams.has('code'))) {
+  if (isLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -188,50 +176,90 @@ function MainApp() {
     );
   }
 
+  // Determine if we should show the verification overlay
+  const showVerificationOverlay = isVerifying && !isAuthenticated && emailForVerification;
+
+  // --- URL Construction ---
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
   let webViewUrl = baseUrl;
-  
-  // Only append params if we are in the verification flow.
-  // An already authenticated user should just load the base URL.
-  if (isVerifying) {
-    const paramsString = searchParams.toString();
-    if (paramsString) {
-      webViewUrl = `${baseUrl}?${paramsString}`;
+
+  // If authenticated, we may not need any params, depending on server logic
+  if (isAuthenticated && user) {
+     // You might want to pass the session to the URL if the server needs it
+     // For now, just load the base URL
+     webViewUrl = `${baseUrl}?session=${user.session}&email=${user.email}`;
+  } else if (isVerifying) {
+    // This is the verification flow
+    const params = new URLSearchParams();
+    if(emailForVerification) params.set('email', emailForVerification);
+    
+    // Only add the code if it has been submitted by the user
+    if (submittedCode) {
+      params.set('code', submittedCode);
     }
+    
+    // Always include verification=true to let the server know the context
+    params.set('verification', 'true');
+
+    webViewUrl = `${baseUrl}?${params.toString()}`;
   }
-
+  
   console.log("Loading WebView with URL:", webViewUrl);
-
 
   return (
     <main className="relative h-screen">
+      {showVerificationOverlay && (
+        <CodeVerificationOverlay
+          email={emailForVerification!}
+          onSubmitCode={(code) => setSubmittedCode(code)}
+          onBack={() => {
+            logout();
+            router.replace('/login');
+          }}
+        />
+      )}
+
       <WebView url={webViewUrl} />
-      <Button
-        onClick={() => logout()}
-        className="absolute bottom-4 right-4 z-20 shadow-lg"
-        variant="destructive"
-      >
-        Restart
-      </Button>
+      
+      {isAuthenticated && (
+        <Button
+          onClick={() => logout()}
+          className="absolute bottom-4 right-4 z-20 shadow-lg"
+          variant="destructive"
+        >
+          Restart
+        </Button>
+      )}
     </main>
   );
 }
 
 function HomePageContent() {
+  const { isAuthenticated, isLoading } = useAuth();
   const searchParams = useSearchParams();
-  const { isAuthenticated } = useAuth();
-  
   const isVerificationFlow = searchParams.has('verification');
-  const hasCode = searchParams.has('code');
 
-  // If we've started verification but haven't submitted a code yet, show the verification form.
-  if (isVerificationFlow && !hasCode) {
-    return <VerificationScreen />;
+  if (isLoading) {
+    return (
+        <div className="flex h-screen w-full items-center justify-center bg-background">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+    );
   }
 
-  // Otherwise (if authenticated, or if verifying with a code), show the main app.
-  // The MainApp component has its own logic to handle redirects if not authenticated.
-  return <MainApp />;
+  // If we are authenticated OR in the process of verifying, show the main app.
+  // MainApp has the internal logic to handle all these states.
+  if (isAuthenticated || isVerificationFlow) {
+    return <MainApp />;
+  }
+  
+  // If not authenticated and not trying to verify, we shouldn't be here. Go to login.
+  // This is a fallback, MainApp has a similar redirect.
+  if (typeof window !== 'undefined') {
+    window.location.href = '/login';
+  }
+
+  return null;
 }
 
 export default function Home() {
