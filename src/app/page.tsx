@@ -189,6 +189,7 @@ function MainApp() {
   } else if (isVerifying) {
     // This is the verification flow.
     const params = new URLSearchParams();
+    params.set('verification', 'true');
     if(emailForVerification) params.set('email', emailForVerification);
     
     // This will trigger the server to send the email on first load.
