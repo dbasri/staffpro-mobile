@@ -28,7 +28,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const router = useRouter();
   const isAuthenticated = !!user;
 
   // Load user from localStorage on initial load
@@ -79,25 +78,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // This is the stable message listener. It's added only once.
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
+      console.log('--- AUTH PROVIDER: MESSAGE RECEIVED ---');
       // IMPORTANT: Always verify the origin of the message for security
       if (event.origin !== 'https://mystaffpro.com') {
+        console.log(`--- AUTH PROVIDER: Message from wrong origin: ${event.origin}. Expected https://mystaffpro.com ---`);
         return;
       }
+      console.log('--- AUTH PROVIDER: Origin OK ---');
 
       let data;
+      if (typeof event.data !== 'string') {
+        console.log('--- AUTH PROVIDER: Message data is not a string. Ignoring. ---', event.data);
+        return;
+      }
+      console.log('--- AUTH PROVIDER: Data is a string. Raw data:', event.data);
+
       try {
-        if (typeof event.data === 'string') {
-          data = JSON.parse(event.data);
-        } else {
-          return; // Ignore non-string messages
-        }
+        data = JSON.parse(event.data);
+        console.log('--- AUTH PROVIDER: JSON parsed successfully ---', data);
       } catch (e) {
-        return; // Ignore non-JSON messages
+        console.log('--- AUTH PROVIDER: Failed to parse JSON. Error:', e);
+        return;
       }
       
       if (data.status === 'success' && data.session) {
+        console.log('--- AUTH PROVIDER: Success status found. Logging in... ---');
         login(data as UserSession);
       } else if (data.status === 'fail') {
+        console.log('--- AUTH PROVIDER: Fail status found. Showing toast... ---');
         toast({
           variant: 'destructive',
           title: 'Authentication Failed',
@@ -105,13 +113,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         // On failure, ensure we are fully logged out and redirect to the login page
         logout();
+      } else {
+        console.log('--- AUTH PROVIDER: Message data did not contain expected status. ---', data);
       }
     };
-
+    
+    console.log('--- AUTH PROVIDER: ADDING MESSAGE LISTENER ---');
     window.addEventListener('message', handleServerMessage);
 
     // Cleanup function to remove the listener when the provider unmounts
     return () => {
+      console.log('--- AUTH PROVIDER: REMOVING MESSAGE LISTENER ---');
       window.removeEventListener('message', handleServerMessage);
     };
   }, [login, logout, toast]);
