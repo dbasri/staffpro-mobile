@@ -128,14 +128,8 @@ function MainApp() {
 
   const [submittedCode, setSubmittedCode] = useState<string | null>(null);
 
-  const isVerifying = searchParams.has('verification');
-  const emailForVerification = searchParams.get('email');
-  
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // If your developer tools are open, the browser will pause execution here.
-      debugger;
-
       console.log('--- MESSAGE EVENT RECEIVED ---');
       console.log("Message event received from origin:", event.origin);
 
@@ -182,20 +176,24 @@ function MainApp() {
   }, [login, logout, router, toast]);
 
   useEffect(() => {
+    const isVerifying = searchParams.has('verification');
     if (!isLoading && !isAuthenticated && !isVerifying) {
       router.replace('/login');
     }
-  }, [isAuthenticated, isLoading, router, isVerifying]);
+  }, [isAuthenticated, isLoading, router, searchParams]);
 
   if (isLoading) {
     return <GlobalLoader />;
   }
+  
+  const isVerifying = searchParams.has('verification');
 
   // This prevents rendering anything while redirecting away
   if (!isAuthenticated && !isVerifying) {
     return null; 
   }
 
+  const emailForVerification = searchParams.get('email');
   const showVerificationOverlay = isVerifying && emailForVerification;
 
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
@@ -246,11 +244,16 @@ function MainApp() {
 }
 
 export default function Home() {
+  // This state ensures the component tree that uses searchParams is only rendered
+  // on the client, after initial hydration, preventing a component remount cycle.
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   return (
-    <Suspense
-      fallback={<GlobalLoader />}
-    >
-      <MainApp />
+    <Suspense fallback={<GlobalLoader />}>
+      {isClient ? <MainApp /> : <GlobalLoader />}
     </Suspense>
   );
 }
