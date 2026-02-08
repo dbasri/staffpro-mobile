@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '@/hooks/use-auth';
@@ -19,23 +19,24 @@ function GlobalLoader() {
   );
 }
 
-type PageState = 'LOADING' | 'PROCESSING_REDIRECT' | 'AWAITING_VERIFICATION' | 'AUTHENTICATED' | 'REDIRECTING_TO_LOGIN';
-
 function MainPage() {
   const { user, isAuthenticated, isLoading: isAuthLoading, login, logout } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const [pageState, setPageState] = useState<PageState>('LOADING');
+  const processedRedirect = useRef(false);
 
+  // This effect handles the one-time redirect from the server after verification.
   useEffect(() => {
-    const status = searchParams.get('status');
-    const hasAuthParams = !!status;
-    const isVerifying = searchParams.has('verification');
+    // Ensure this only runs once and only on the client.
+    if (processedRedirect.current || typeof window === 'undefined') {
+      return;
+    }
 
-    // Priority 1: Handle server redirect
-    if (hasAuthParams) {
-      setPageState('PROCESSING_REDIRECT');
+    const status = searchParams.get('status');
+    if (status) {
+      processedRedirect.current = true; // Mark as processed to prevent re-running.
+      
       const session = searchParams.get('session');
       const email = searchParams.get('email');
       const name = searchParams.get('name');
@@ -49,10 +50,10 @@ function MainPage() {
           name: name || '',
           purpose: purpose || 'Login via redirect.',
         } as UserSession);
-        // On successful login, the URL is cleaned and a re-render is triggered.
-        // The next run of this effect will set the state to 'AUTHENTICATED'.
+        // After setting auth state, redirect to a clean URL.
+        // The app will reload in a clean authenticated state.
         router.replace('/');
-      } else { // status === 'fail' or other
+      } else {
         toast({
           variant: 'destructive',
           title: 'Authentication Failed',
@@ -61,79 +62,69 @@ function MainPage() {
         logout();
         router.replace('/login');
       }
-      return;
     }
+  }, [searchParams, login, logout, router, toast]);
 
-    // After redirects, check auth loading state
-    if (isAuthLoading) {
-      setPageState('LOADING');
-      return;
-    }
+  const isVerifying = searchParams.has('verification');
+  const emailForVerification = searchParams.get('email');
 
-    // Priority 2: User is authenticated
-    if (isAuthenticated) {
-      setPageState('AUTHENTICATED');
+  // This effect handles redirecting unauthenticated users to the login page.
+  useEffect(() => {
+    // Don't redirect if we are loading, already authenticated, or in a verification flow.
+    if (isAuthLoading || isAuthenticated || isVerifying || processedRedirect.current) {
       return;
     }
-
-    // Priority 3: User is in the middle of verification flow
-    if (isVerifying) {
-      setPageState('AWAITING_VERIFICATION');
-      return;
-    }
-    
-    // Priority 4: User is unauthenticated and not doing anything else
-    setPageState('REDIRECTING_TO_LOGIN');
     router.replace('/login');
+  }, [isAuthLoading, isAuthenticated, isVerifying, router]);
 
-  }, [searchParams, isAuthLoading, isAuthenticated, login, logout, router, toast]);
 
-  // Render based on state
-  if (pageState === 'LOADING' || pageState === 'PROCESSING_REDIRECT' || pageState === 'REDIRECTING_TO_LOGIN') {
+  // Render based on the current, stable state.
+  if (isAuthLoading || processedRedirect.current) {
     return <GlobalLoader />;
   }
-
-  const emailForVerification = searchParams.get('email');
-  const showVerificationOverlay = pageState === 'AWAITING_VERIFICATION' && !!emailForVerification;
-
-  const baseUrl = "https://mystaffpro.com/v6/m_mobile";
-  let webViewUrl = baseUrl;
-
-  if (pageState === 'AUTHENTICATED' && user) {
-     webViewUrl = `${baseUrl}?session=${user.session}&email=${user.email}`;
-  } else if (pageState === 'AWAITING_VERIFICATION') {
-    const params = new URLSearchParams(searchParams.toString());
-    webViewUrl = `${baseUrl}?${params.toString()}`;
-  }
   
-  return (
-    <main className="relative h-screen">
-      {showVerificationOverlay && (
-        <CodeVerificationOverlay
-          email={emailForVerification!}
-          onBack={() => {
-            router.replace('/login');
-          }}
-        />
-      )}
-
-      {(pageState === 'AWAITING_VERIFICATION' || pageState === 'AUTHENTICATED') && <WebView url={webViewUrl} />}
-      
-      {pageState === 'AUTHENTICATED' && (
+  if (isAuthenticated) {
+    const baseUrl = "https://mystaffpro.com/v6/m_mobile";
+    const webViewUrl = `${baseUrl}?session=${user!.session}&email=${user!.email}`;
+    return (
+      <main className="relative h-screen">
+        <WebView url={webViewUrl} />
         <Button
-          onClick={() => logout()}
+          onClick={() => {
+            logout();
+            router.push('/login');
+          }}
           className="absolute bottom-4 right-4 z-20 shadow-lg"
           variant="destructive"
         >
           Restart
         </Button>
-      )}
-    </main>
-  );
+      </main>
+    );
+  }
+  
+  if (isVerifying && emailForVerification) {
+    const baseUrl = "https://mystaffpro.com/v6/m_mobile";
+    const params = new URLSearchParams(searchParams.toString());
+    const webViewUrl = `${baseUrl}?${params.toString()}`;
+    return (
+      <main className="relative h-screen">
+        <CodeVerificationOverlay
+          email={emailForVerification}
+          onBack={() => {
+            router.replace('/login');
+          }}
+        />
+        <WebView url={webViewUrl} />
+      </main>
+    );
+  }
+
+  // Default to loader while figuring out where to go.
+  return <GlobalLoader />;
 }
 
 export default function Home() {
-  // Suspense is needed because MainPage uses useSearchParams()
   return (
     <Suspense fallback={<GlobalLoader />}>
       <MainPage />
