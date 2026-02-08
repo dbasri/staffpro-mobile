@@ -35,6 +35,17 @@ export default function RootLayout({
           {children}
           <Toaster />
         </AuthProvider>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener('message', (event) => {
+                console.log('--- GLOBAL MESSAGE LISTENER ---');
+                console.log('Global listener received origin:', event.origin);
+                console.log('Global listener received data:', event.data);
+              });
+            `,
+          }}
+        />
       </body>
     </html>
   );

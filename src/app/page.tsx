@@ -130,8 +130,10 @@ function MainApp() {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      console.log('--- MESSAGE EVENT RECEIVED ---');
-      console.log("Message event received from origin:", event.origin);
+      // debugger;
+      console.log('--- REACT MESSAGE LISTENER ---');
+      console.log("React listener received origin:", event.origin);
+      console.log("React listener received data:", event.data);
 
       // SECURITY: Only accept messages from our trusted server origin.
       if (event.origin !== "https://mystaffpro.com") {
@@ -139,8 +141,6 @@ function MainApp() {
         return;
       }
       
-      console.log("Message data received:", event.data);
-
       if (event.data && typeof event.data === 'object' && 'status' in event.data) {
         const serverData = event.data as UserSession;
         console.log('Server data parsed:', serverData);
@@ -244,8 +244,6 @@ function MainApp() {
 }
 
 export default function Home() {
-  // This state ensures the component tree that uses searchParams is only rendered
-  // on the client, after initial hydration, preventing a component remount cycle.
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
     setIsClient(true);
