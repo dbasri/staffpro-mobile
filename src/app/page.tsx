@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import WebView from '@/components/web-view';
 import { Loader2 } from 'lucide-react';
@@ -19,20 +19,19 @@ function GlobalLoader() {
 
 function MainPage() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
-  
+
   // This effect handles redirecting unauthenticated users to the login page.
   useEffect(() => {
     // Don't redirect if we are loading, already authenticated, or in a verification flow
     if (isAuthLoading || isAuthenticated || isVerifying) {
       return;
     }
-    router.replace('/login');
-  }, [isAuthLoading, isAuthenticated, isVerifying, router]);
+    window.location.assign('/login');
+  }, [isAuthLoading, isAuthenticated, isVerifying]);
 
   // Render based on the current, stable state.
   if (isAuthLoading) {
@@ -71,7 +70,7 @@ function MainPage() {
         <CodeVerificationOverlay
           email={emailForVerification}
           onBack={() => {
-            router.replace('/login');
+            window.location.assign('/login');
           }}
         />
         <WebView url={webViewUrl} />
