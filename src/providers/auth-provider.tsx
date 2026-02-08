@@ -60,6 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const passkeyLogin = useCallback(async () => {
+    // This is a mock implementation for passkey login.
+    // In a real application, you would integrate with a WebAuthn library.
     const mockSession: UserSession = {
       status: 'success',
       email: 'passkey-user@example.com',
