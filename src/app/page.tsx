@@ -37,23 +37,34 @@ function MainPage() {
     if (status) {
       processedRedirect.current = true; // Mark as processed to prevent re-running.
       
-      const session = searchParams.get('session');
-      const email = searchParams.get('email');
-      const name = searchParams.get('name');
       const purpose = searchParams.get('purpose');
 
-      if (status === 'success' && session && email) {
-        login({
-          status: 'success',
-          session,
-          email,
-          name: name || '',
-          purpose: purpose || 'Login via redirect.',
-        } as UserSession);
-        // After setting auth state, redirect to a clean URL.
-        // The app will reload in a clean authenticated state.
-        router.replace('/');
-      } else {
+      if (status === 'success') {
+        const session = searchParams.get('session');
+        const email = searchParams.get('email');
+        const name = searchParams.get('name');
+        
+        if (session && email) {
+          login({
+            status: 'success',
+            session,
+            email,
+            name: name || '',
+            purpose: purpose || 'Login via redirect.',
+          } as UserSession);
+          // After setting auth state, do a full page reload to a clean URL.
+          // This is more robust than router.replace() for clearing state.
+          window.location.assign('/');
+        } else {
+           toast({
+            variant: 'destructive',
+            title: 'Authentication Incomplete',
+            description: 'Missing session data from the server.',
+          });
+          logout();
+          router.replace('/login');
+        }
+      } else { // status === 'fail'
         toast({
           variant: 'destructive',
           title: 'Authentication Failed',
@@ -70,7 +81,8 @@ function MainPage() {
 
   // This effect handles redirecting unauthenticated users to the login page.
   useEffect(() => {
-    // Don't redirect if we are loading, already authenticated, or in a verification flow.
+    // Don't redirect if we are loading, already authenticated, in a verification flow,
+    // or currently processing a redirect from the server.
     if (isAuthLoading || isAuthenticated || isVerifying || processedRedirect.current) {
       return;
     }
