@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { UserSession } from '@/types/session';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
   user: UserSession | null;
@@ -27,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const router = useRouter();
   const isAuthenticated = !!user;
 
   // Load user from localStorage on initial load
@@ -41,7 +43,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Could not access local storage or parse session:', error);
-      // Clear potentially corrupt session data
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } finally {
       setIsLoading(false);
@@ -52,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
       setUser(sessionData);
+      // A full page reload is the most robust way to ensure a clean state
+      window.location.assign('/');
     } catch (error) {
       console.error('Could not access local storage to save session:', error);
       toast({
@@ -69,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Could not access local storage to remove session:', error);
     }
     setUser(null);
-    // A full page reload on logout ensures a clean state and redirects to login
+    // A full page reload ensures a clean state and redirects to login
     window.location.assign('/login');
   }, []);
 
@@ -89,15 +92,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return; // Ignore non-string messages
         }
       } catch (e) {
-        console.error('Could not parse message from server:', event.data);
-        return;
+        return; // Ignore non-JSON messages
       }
       
       if (data.status === 'success' && data.session) {
         login(data as UserSession);
-        // After successful login, do a full page reload to a clean URL.
-        // This is the most robust way to clear all old state and show the authenticated view.
-        window.location.assign('/');
       } else if (data.status === 'fail') {
         toast({
           variant: 'destructive',
@@ -127,7 +126,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       purpose: 'Passkey login successful',
     };
     login(mockSession);
-    window.location.assign('/');
   }, [login]);
 
   return (
