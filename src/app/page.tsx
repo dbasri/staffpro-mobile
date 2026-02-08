@@ -1,13 +1,14 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import WebView from '@/components/web-view';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CodeVerificationOverlay from '@/components/auth/code-verification-overlay';
-import { useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import type { UserSession } from '@/types/session';
 
 function GlobalLoader() {
   return (
@@ -18,11 +19,55 @@ function GlobalLoader() {
 }
 
 function MainPage() {
-  const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading, login, logout } = useAuth();
+  const { toast } = useToast();
   const searchParams = useSearchParams();
 
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
+
+  // Add the message listener here, tied to the verification flow.
+  useEffect(() => {
+    if (!isVerifying) {
+      return;
+    }
+
+    const handleServerMessage = (event: MessageEvent) => {
+      // IMPORTANT: Always verify the origin of the message for security
+      if (event.origin !== 'https://mystaffpro.com') {
+        return;
+      }
+
+      let data;
+      try {
+        data = JSON.parse(event.data);
+      } catch (e) {
+        // Ignore messages that are not valid JSON
+        return;
+      }
+
+      if (data.status === 'success' && data.session) {
+        login(data as UserSession);
+      } else if (data.status === 'fail') {
+        toast({
+          variant: 'destructive',
+          title: 'Authentication Failed',
+          description:
+            data.purpose || 'An unknown error occurred on the server.',
+        });
+        // On failure, logout() will redirect to the login page.
+        logout();
+      }
+    };
+
+    window.addEventListener('message', handleServerMessage);
+
+    // Cleanup function to remove the listener when the component unmounts
+    return () => {
+      window.removeEventListener('message', handleServerMessage);
+    };
+  }, [isVerifying, login, logout, toast]);
+
 
   // This effect handles redirecting unauthenticated users to the login page.
   useEffect(() => {
@@ -79,7 +124,6 @@ function MainPage() {
   }
 
   // Default to loader while figuring out where to go.
-  // This is hit while the useEffect that redirects to /login is running.
   return <GlobalLoader />;
 }
 
