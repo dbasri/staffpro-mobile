@@ -29,7 +29,7 @@ function MainPage() {
   // This effect handles the one-time redirect from the server after verification.
   useEffect(() => {
     // Ensure this only runs once and only on the client.
-    if (processedRedirect.current || typeof window === 'undefined') {
+    if (typeof window === 'undefined' || processedRedirect.current) {
       return;
     }
 
