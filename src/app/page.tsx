@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '@/hooks/use-auth';
@@ -19,22 +19,28 @@ function GlobalLoader() {
   );
 }
 
+type PageState = 'LOADING' | 'PROCESSING_REDIRECT' | 'AWAITING_VERIFICATION' | 'AUTHENTICATED' | 'REDIRECTING_TO_LOGIN';
+
 function MainPage() {
-  const { user, isAuthenticated, isLoading, login, logout } = useAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading, login, logout } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const [pageState, setPageState] = useState<PageState>('LOADING');
 
-  // This effect handles the login redirect from the server
   useEffect(() => {
     const status = searchParams.get('status');
-    const session = searchParams.get('session');
-    const email = searchParams.get('email');
-    const name = searchParams.get('name');
-    const purpose = searchParams.get('purpose');
-    const hasAuthParams = status && (session || purpose);
+    const hasAuthParams = !!status;
+    const isVerifying = searchParams.has('verification');
 
+    // Priority 1: Handle server redirect
     if (hasAuthParams) {
+      setPageState('PROCESSING_REDIRECT');
+      const session = searchParams.get('session');
+      const email = searchParams.get('email');
+      const name = searchParams.get('name');
+      const purpose = searchParams.get('purpose');
+
       if (status === 'success' && session && email) {
         login({
           status: 'success',
@@ -43,63 +49,59 @@ function MainPage() {
           name: name || '',
           purpose: purpose || 'Login via redirect.',
         } as UserSession);
-        // Clean the URL to remove auth params from the address bar
+        // On successful login, the URL is cleaned and a re-render is triggered.
+        // The next run of this effect will set the state to 'AUTHENTICATED'.
         router.replace('/');
-      } else if (status === 'fail') {
+      } else { // status === 'fail' or other
         toast({
           variant: 'destructive',
           title: 'Authentication Failed',
-          description: purpose || 'An unknown error occurred during verification.',
+          description: purpose || 'An unknown error occurred.',
         });
         logout();
-        // Clean the URL and go back to login
         router.replace('/login');
-      } else {
-        // Clean the URL to remove unexpected auth params from the address bar
-        router.replace('/');
       }
+      return;
     }
-  }, [searchParams, login, logout, router, toast]);
 
-  // This effect handles redirecting unauthenticated users to the login page
-  useEffect(() => {
-    // Wait until the auth state is loaded
-    if (isLoading) {
+    // After redirects, check auth loading state
+    if (isAuthLoading) {
+      setPageState('LOADING');
+      return;
+    }
+
+    // Priority 2: User is authenticated
+    if (isAuthenticated) {
+      setPageState('AUTHENTICATED');
+      return;
+    }
+
+    // Priority 3: User is in the middle of verification flow
+    if (isVerifying) {
+      setPageState('AWAITING_VERIFICATION');
       return;
     }
     
-    // If user is authenticated, do nothing.
-    if (isAuthenticated) {
-      return;
-    }
+    // Priority 4: User is unauthenticated and not doing anything else
+    setPageState('REDIRECTING_TO_LOGIN');
+    router.replace('/login');
 
-    // Don't redirect if we are processing auth params from a redirect
-    // or if we are in the middle of a verification flow.
-    const isVerifying = searchParams.has('verification');
-    const isProcessingAuth = searchParams.has('status');
+  }, [searchParams, isAuthLoading, isAuthenticated, login, logout, router, toast]);
 
-    if (!isVerifying && !isProcessingAuth) {
-      router.replace('/login');
-    }
-  }, [isAuthenticated, isLoading, router, searchParams]);
-
-  if (isLoading || (!isAuthenticated && !searchParams.has('verification') && !searchParams.has('status'))) {
-    // Show a loader while the initial auth state is being determined,
-    // or while we are redirecting an unauthenticated user to login.
+  // Render based on state
+  if (pageState === 'LOADING' || pageState === 'PROCESSING_REDIRECT' || pageState === 'REDIRECTING_TO_LOGIN') {
     return <GlobalLoader />;
   }
-  
-  const isVerifying = searchParams.has('verification');
+
   const emailForVerification = searchParams.get('email');
-  const showVerificationOverlay = isVerifying && emailForVerification && !isAuthenticated;
-  
+  const showVerificationOverlay = pageState === 'AWAITING_VERIFICATION' && !!emailForVerification;
+
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
   let webViewUrl = baseUrl;
 
-  if (isAuthenticated && user) {
+  if (pageState === 'AUTHENTICATED' && user) {
      webViewUrl = `${baseUrl}?session=${user.session}&email=${user.email}`;
-  } else if (isVerifying) {
-    // Pass all current search params to the iframe
+  } else if (pageState === 'AWAITING_VERIFICATION') {
     const params = new URLSearchParams(searchParams.toString());
     webViewUrl = `${baseUrl}?${params.toString()}`;
   }
@@ -110,15 +112,14 @@ function MainPage() {
         <CodeVerificationOverlay
           email={emailForVerification!}
           onBack={() => {
-            logout();
             router.replace('/login');
           }}
         />
       )}
 
-      {(isVerifying || isAuthenticated) && <WebView url={webViewUrl} />}
+      {(pageState === 'AWAITING_VERIFICATION' || pageState === 'AUTHENTICATED') && <WebView url={webViewUrl} />}
       
-      {isAuthenticated && (
+      {pageState === 'AUTHENTICATED' && (
         <Button
           onClick={() => logout()}
           className="absolute bottom-4 right-4 z-20 shadow-lg"
