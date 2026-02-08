@@ -26,9 +26,10 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import type { UserSession } from '@/types/session';
+import { useToast } from '@/hooks/use-toast';
 
 
-// --- Global Loader for Suspense Fallback ---
 function GlobalLoader() {
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -36,7 +37,6 @@ function GlobalLoader() {
     </div>
   );
 }
-
 
 const CodeVerificationSchema = z.object({
   code: z.string().min(1, { message: 'Please enter the code.' }),
@@ -117,14 +117,46 @@ function CodeVerificationOverlay({
   );
 }
 
-
-function MainApp() {
-  const { user, isAuthenticated, isLoading, logout } = useAuth();
+function MainPage() {
+  const { user, isAuthenticated, isLoading, login, logout } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   
   const [submittedCode, setSubmittedCode] = useState<string | null>(null);
 
+  // This effect handles the login redirect from the server
+  useEffect(() => {
+    const status = searchParams.get('status');
+    const session = searchParams.get('session');
+    const email = searchParams.get('email');
+    const name = searchParams.get('name');
+    const purpose = searchParams.get('purpose');
+    const hasAuthParams = status && (session || purpose);
+
+    if (hasAuthParams) {
+      if (status === 'success' && session && email) {
+        login({
+          status: 'success',
+          session,
+          email,
+          name: name || '',
+          purpose: purpose || 'Login via redirect.',
+        } as UserSession);
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Authentication Failed',
+          description: purpose || 'An unknown error occurred during verification.',
+        });
+        logout();
+      }
+      // Clean the URL to remove session info from the address bar
+      router.replace('/');
+    }
+  }, [searchParams, login, logout, router, toast]);
+
+  // This effect handles redirecting unauthenticated users to the login page
   useEffect(() => {
     const isVerifying = searchParams.has('verification');
     if (!isLoading && !isAuthenticated && !isVerifying) {
@@ -138,9 +170,8 @@ function MainApp() {
   
   const isVerifying = searchParams.has('verification');
 
-  // This prevents rendering anything while redirecting away
   if (!isAuthenticated && !isVerifying) {
-    return null; 
+    return <GlobalLoader />; 
   }
 
   const emailForVerification = searchParams.get('email');
@@ -163,11 +194,9 @@ function MainApp() {
     webViewUrl = `${baseUrl}?${params.toString()}`;
   }
   
-  console.log("Loading WebView with URL:", webViewUrl);
-
   return (
     <main className="relative h-screen">
-      {showVerificationOverlay && (
+      {showVerificationOverlay && !isAuthenticated && (
         <CodeVerificationOverlay
           email={emailForVerification!}
           onSubmitCode={(code) => setSubmittedCode(code)}
@@ -194,14 +223,10 @@ function MainApp() {
 }
 
 export default function Home() {
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
+  // Suspense is needed because MainPage uses useSearchParams()
   return (
     <Suspense fallback={<GlobalLoader />}>
-      {isClient ? <MainApp /> : <GlobalLoader />}
+      <MainPage />
     </Suspense>
   );
 }
