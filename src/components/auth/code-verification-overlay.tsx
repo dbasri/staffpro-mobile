@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { MailCheck, ShieldCheck } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 const CodeVerificationSchema = z.object({
   code: z.string().min(1, { message: 'Please enter the code.' }),
@@ -37,20 +37,25 @@ export default function CodeVerificationOverlay({
   onBack: () => void;
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  
+
   const form = useForm<CodeVerificationFormValues>({
     resolver: zodResolver(CodeVerificationSchema),
     defaultValues: { code: '' },
   });
-  
+
   const handleVerifySubmit = (data: CodeVerificationFormValues) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('code', data.code);
-    // Update the main page URL with the code.
-    // The MainPage component will see this and re-render the WebView
-    // with the code included, triggering the server-side verification.
-    router.push(`/?${params.toString()}`);
+    // This submits the code to the iframe by reloading it.
+    // The server-side script in the iframe will then post a message back to the app.
+    const webview = document.querySelector('iframe');
+    if (webview && webview.contentWindow) {
+      const baseUrl = "https://mystaffpro.com/v6/m_mobile";
+      const params = new URLSearchParams({
+        verification: 'true',
+        email: email,
+        code: data.code,
+      });
+      webview.src = `${baseUrl}?${params.toString()}`;
+    }
   };
 
   return (
@@ -96,7 +101,7 @@ export default function CodeVerificationOverlay({
                 <Button type="submit" className="w-full">
                   Verify Code
                 </Button>
-                <Button onClick={onBack} variant="outline" className="w-full">
+                <Button onClick={onBack} variant="outline" className="w-full" type="button">
                   Back to Login
                 </Button>
               </div>

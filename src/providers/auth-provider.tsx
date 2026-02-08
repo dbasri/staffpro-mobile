@@ -8,6 +8,7 @@ import {
   useCallback,
 } from 'react';
 import type { UserSession } from '@/types/session';
+import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
   user: UserSession | null;
@@ -20,14 +21,18 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
+const SESSION_STORAGE_KEY = 'staffpro-session';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
   const isAuthenticated = !!user;
 
+  // Load user from localStorage on initial load
   useEffect(() => {
     try {
-      const sessionString = localStorage.getItem('staffpro-session');
+      const sessionString = localStorage.getItem(SESSION_STORAGE_KEY);
       if (sessionString) {
         const session = JSON.parse(sessionString);
         if (session.status === 'success') {
@@ -36,6 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Could not access local storage or parse session:', error);
+      // Clear potentially corrupt session data
+      localStorage.removeItem(SESSION_STORAGE_KEY);
     } finally {
       setIsLoading(false);
     }
@@ -43,25 +50,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback((sessionData: UserSession) => {
     try {
-      localStorage.setItem('staffpro-session', JSON.stringify(sessionData));
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
       setUser(sessionData);
     } catch (error) {
       console.error('Could not access local storage to save session:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Login Error',
+        description: 'Could not save session to device.',
+      });
     }
-  }, []);
+  }, [toast]);
 
   const logout = useCallback(() => {
     try {
-      localStorage.removeItem('staffpro-session');
-      setUser(null);
+      localStorage.removeItem(SESSION_STORAGE_KEY);
     } catch (error) {
       console.error('Could not access local storage to remove session:', error);
     }
+    setUser(null);
+    // A full page reload on logout ensures a clean state and redirects to login
+    window.location.assign('/login');
   }, []);
 
+  // This is the stable message listener. It's added only once.
+  useEffect(() => {
+    const handleServerMessage = (event: MessageEvent) => {
+      // IMPORTANT: Always verify the origin of the message for security
+      if (event.origin !== 'https://mystaffpro.com') {
+        return;
+      }
+
+      let data;
+      try {
+        if (typeof event.data === 'string') {
+          data = JSON.parse(event.data);
+        } else {
+          return; // Ignore non-string messages
+        }
+      } catch (e) {
+        console.error('Could not parse message from server:', event.data);
+        return;
+      }
+      
+      if (data.status === 'success' && data.session) {
+        login(data as UserSession);
+        // After successful login, do a full page reload to a clean URL.
+        // This is the most robust way to clear all old state and show the authenticated view.
+        window.location.assign('/');
+      } else if (data.status === 'fail') {
+        toast({
+          variant: 'destructive',
+          title: 'Authentication Failed',
+          description: data.purpose || 'An unknown error occurred on the server.',
+        });
+        // On failure, ensure we are fully logged out and redirect to the login page
+        logout();
+      }
+    };
+
+    window.addEventListener('message', handleServerMessage);
+
+    // Cleanup function to remove the listener when the provider unmounts
+    return () => {
+      window.removeEventListener('message', handleServerMessage);
+    };
+  }, [login, logout, toast]);
+
+
   const passkeyLogin = useCallback(async () => {
-    // This is a mock implementation for passkey login.
-    // In a real application, you would integrate with a WebAuthn library.
     const mockSession: UserSession = {
       status: 'success',
       email: 'passkey-user@example.com',
@@ -70,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       purpose: 'Passkey login successful',
     };
     login(mockSession);
+    window.location.assign('/');
   }, [login]);
 
   return (
