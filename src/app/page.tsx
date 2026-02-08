@@ -1,34 +1,15 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 
 import { useAuth } from '@/hooks/use-auth';
 import WebView from '@/components/web-view';
-import { Loader2, MailCheck, ShieldCheck } from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import type { UserSession } from '@/types/session';
 import { useToast } from '@/hooks/use-toast';
-
+import CodeVerificationOverlay from '@/components/auth/code-verification-overlay';
 
 function GlobalLoader() {
   return (
@@ -38,92 +19,11 @@ function GlobalLoader() {
   );
 }
 
-const CodeVerificationSchema = z.object({
-  code: z.string().min(1, { message: 'Please enter the code.' }),
-});
-
-type CodeVerificationFormValues = z.infer<typeof CodeVerificationSchema>;
-
-function CodeVerificationOverlay({
-  email,
-  onSubmitCode,
-  onBack,
-}: {
-  email: string;
-  onSubmitCode: (code: string) => void;
-  onBack: () => void;
-}) {
-  const form = useForm<CodeVerificationFormValues>({
-    resolver: zodResolver(CodeVerificationSchema),
-    defaultValues: { code: '' },
-  });
-
-  const handleVerifySubmit = (data: CodeVerificationFormValues) => {
-    onSubmitCode(data.code);
-  };
-
-  return (
-    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <MailCheck className="h-8 w-8 text-primary" />
-          </div>
-          <CardTitle className="text-2xl">Check your inbox</CardTitle>
-          <CardDescription>
-            A verification code has been sent to{' '}
-            <span className="font-semibold text-foreground">{email}</span>.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(handleVerifySubmit)}
-              className="space-y-4"
-            >
-              <FormField
-                control={form.control}
-                name="code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Verification Code</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <ShieldCheck className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          placeholder="XXXXXX"
-                          {...field}
-                          className="pl-10 text-center tracking-[0.5em]"
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="space-y-2 pt-2">
-                <Button type="submit" className="w-full">
-                  Verify Code
-                </Button>
-                <Button onClick={onBack} variant="outline" className="w-full">
-                  Back to Login
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 function MainPage() {
   const { user, isAuthenticated, isLoading, login, logout } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  
-  const [submittedCode, setSubmittedCode] = useState<string | null>(null);
 
   // This effect handles the login redirect from the server
   useEffect(() => {
@@ -143,63 +43,72 @@ function MainPage() {
           name: name || '',
           purpose: purpose || 'Login via redirect.',
         } as UserSession);
-      } else {
+        // Clean the URL to remove auth params from the address bar
+        router.replace('/');
+      } else if (status === 'fail') {
         toast({
           variant: 'destructive',
           title: 'Authentication Failed',
           description: purpose || 'An unknown error occurred during verification.',
         });
         logout();
+        // Clean the URL and go back to login
+        router.replace('/login');
+      } else {
+        // Clean the URL to remove unexpected auth params from the address bar
+        router.replace('/');
       }
-      // Clean the URL to remove auth params from the address bar
-      router.replace('/');
     }
   }, [searchParams, login, logout, router, toast]);
 
   // This effect handles redirecting unauthenticated users to the login page
   useEffect(() => {
+    // Wait until the auth state is loaded
+    if (isLoading) {
+      return;
+    }
+    
+    // If user is authenticated, do nothing.
+    if (isAuthenticated) {
+      return;
+    }
+
+    // Don't redirect if we are processing auth params from a redirect
+    // or if we are in the middle of a verification flow.
     const isVerifying = searchParams.has('verification');
-    if (!isLoading && !isAuthenticated && !isVerifying) {
+    const isProcessingAuth = searchParams.has('status');
+
+    if (!isVerifying && !isProcessingAuth) {
       router.replace('/login');
     }
   }, [isAuthenticated, isLoading, router, searchParams]);
 
-  if (isLoading) {
+  if (isLoading || (!isAuthenticated && !searchParams.has('verification') && !searchParams.has('status'))) {
+    // Show a loader while the initial auth state is being determined,
+    // or while we are redirecting an unauthenticated user to login.
     return <GlobalLoader />;
   }
   
   const isVerifying = searchParams.has('verification');
-
-  if (!isAuthenticated && !isVerifying) {
-    return <GlobalLoader />; 
-  }
-
   const emailForVerification = searchParams.get('email');
-  const showVerificationOverlay = isVerifying && emailForVerification;
-
+  const showVerificationOverlay = isVerifying && emailForVerification && !isAuthenticated;
+  
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
   let webViewUrl = baseUrl;
 
   if (isAuthenticated && user) {
      webViewUrl = `${baseUrl}?session=${user.session}&email=${user.email}`;
   } else if (isVerifying) {
-    const params = new URLSearchParams();
-    params.set('verification', 'true');
-    if(emailForVerification) params.set('email', emailForVerification);
-    
-    if (submittedCode) {
-      params.set('code', submittedCode);
-    }
-    
+    // Pass all current search params to the iframe
+    const params = new URLSearchParams(searchParams.toString());
     webViewUrl = `${baseUrl}?${params.toString()}`;
   }
   
   return (
     <main className="relative h-screen">
-      {showVerificationOverlay && !isAuthenticated && (
+      {showVerificationOverlay && (
         <CodeVerificationOverlay
           email={emailForVerification!}
-          onSubmitCode={(code) => setSubmittedCode(code)}
           onBack={() => {
             logout();
             router.replace('/login');
