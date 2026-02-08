@@ -151,7 +151,7 @@ function MainPage() {
         });
         logout();
       }
-      // Clean the URL to remove session info from the address bar
+      // Clean the URL to remove auth params from the address bar
       router.replace('/');
     }
   }, [searchParams, login, logout, router, toast]);
