@@ -177,7 +177,7 @@ function MainApp() {
     }
   }, [isAuthenticated, isLoading, router, isVerifying]);
 
-  if (isLoading && !isVerifying) {
+  if (isLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -185,12 +185,14 @@ function MainApp() {
     );
   }
 
-  const showVerificationOverlay = isVerifying && !isAuthenticated && emailForVerification;
+  const showVerificationOverlay = isVerifying && emailForVerification;
 
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
   let webViewUrl = baseUrl;
 
-  if (isVerifying) {
+  if (isAuthenticated && user) {
+     webViewUrl = `${baseUrl}?session=${user.session}&email=${user.email}`;
+  } else if (isVerifying) {
     const params = new URLSearchParams();
     params.set('verification', 'true');
     if(emailForVerification) params.set('email', emailForVerification);
@@ -200,8 +202,6 @@ function MainApp() {
     }
     
     webViewUrl = `${baseUrl}?${params.toString()}`;
-  } else if (isAuthenticated && user) {
-     webViewUrl = `${baseUrl}?session=${user.session}&email=${user.email}`;
   }
   
   console.log("Loading WebView with URL:", webViewUrl);
@@ -239,7 +239,7 @@ function HomePageContent() {
   const searchParams = useSearchParams();
   const isVerificationFlow = searchParams.has('verification');
 
-  if (isLoading) {
+  if (isLoading && !isVerificationFlow) {
     return (
         <div className="flex h-screen w-full items-center justify-center bg-background">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -250,11 +250,6 @@ function HomePageContent() {
   if (isAuthenticated || isVerificationFlow) {
     return <MainApp />;
   }
-  
-  // This was causing a redirect loop. It's safer to handle this in useEffect.
-  // if (typeof window !== 'undefined' && window.location.pathname === '/') {
-  //   window.location.href = '/login';
-  // }
 
   return null;
 }
