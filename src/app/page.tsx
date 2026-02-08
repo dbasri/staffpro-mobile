@@ -30,6 +30,16 @@ import { Input } from '@/components/ui/input';
 import type { UserSession } from '@/types/session';
 
 
+// --- Global Loader for Suspense Fallback ---
+function GlobalLoader() {
+  return (
+    <div className="flex h-screen w-full items-center justify-center bg-background">
+      <Loader2 className="h-12 w-12 animate-spin text-primary" />
+    </div>
+  );
+}
+
+
 const CodeVerificationSchema = z.object({
   code: z.string().min(1, { message: 'Please enter the code.' }),
 });
@@ -118,6 +128,9 @@ function MainApp() {
 
   const [submittedCode, setSubmittedCode] = useState<string | null>(null);
 
+  const isVerifying = searchParams.has('verification');
+  const emailForVerification = searchParams.get('email');
+  
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // If your developer tools are open, the browser will pause execution here.
@@ -166,10 +179,7 @@ function MainApp() {
       console.log('--- REMOVING window message event listener ---');
       window.removeEventListener('message', handleMessage);
     };
-  }, []);
-
-  const isVerifying = searchParams.has('verification');
-  const emailForVerification = searchParams.get('email');
+  }, [login, logout, router, toast]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated && !isVerifying) {
@@ -178,11 +188,12 @@ function MainApp() {
   }, [isAuthenticated, isLoading, router, isVerifying]);
 
   if (isLoading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
+    return <GlobalLoader />;
+  }
+
+  // This prevents rendering anything while redirecting away
+  if (!isAuthenticated && !isVerifying) {
+    return null; 
   }
 
   const showVerificationOverlay = isVerifying && emailForVerification;
@@ -234,36 +245,12 @@ function MainApp() {
   );
 }
 
-function HomePageContent() {
-  const { isAuthenticated, isLoading } = useAuth();
-  const searchParams = useSearchParams();
-  const isVerificationFlow = searchParams.has('verification');
-
-  if (isLoading && !isVerificationFlow) {
-    return (
-        <div className="flex h-screen w-full items-center justify-center bg-background">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        </div>
-    );
-  }
-
-  if (isAuthenticated || isVerificationFlow) {
-    return <MainApp />;
-  }
-
-  return null;
-}
-
 export default function Home() {
   return (
     <Suspense
-      fallback={
-        <div className="flex h-screen w-full items-center justify-center bg-background">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        </div>
-      }
+      fallback={<GlobalLoader />}
     >
-      <HomePageContent />
+      <MainApp />
     </Suspense>
   );
 }
