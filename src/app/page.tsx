@@ -163,10 +163,10 @@ function MainApp() {
     window.addEventListener('message', handleMessage);
 
     return () => {
-      console.log('Removing window message event listener.');
+      console.log('--- REMOVING window message event listener ---');
       window.removeEventListener('message', handleMessage);
     };
-  }, [logout, toast, login, router]);
+  }, []);
 
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
