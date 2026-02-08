@@ -7,7 +7,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
 import { useAuth } from '@/hooks/use-auth';
-import { useToast } from '@/hooks/use-toast';
 import WebView from '@/components/web-view';
 import { Loader2, MailCheck, ShieldCheck } from 'lucide-react';
 import {
@@ -27,7 +26,6 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import type { UserSession } from '@/types/session';
 
 
 // --- Global Loader for Suspense Fallback ---
@@ -121,59 +119,11 @@ function CodeVerificationOverlay({
 
 
 function MainApp() {
-  const { user, isAuthenticated, isLoading, logout, login } = useAuth();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { toast } = useToast();
-
+  
   const [submittedCode, setSubmittedCode] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      // debugger;
-      console.log('--- REACT MESSAGE LISTENER ---');
-      console.log("React listener received origin:", event.origin);
-      console.log("React listener received data:", event.data);
-
-      // SECURITY: Only accept messages from our trusted server origin.
-      if (event.origin !== "https://mystaffpro.com") {
-        console.warn(`Message from untrusted origin ignored: ${event.origin}. Expected 'https://mystaffpro.com'.`);
-        return;
-      }
-      
-      if (event.data && typeof event.data === 'object' && 'status' in event.data) {
-        const serverData = event.data as UserSession;
-        console.log('Server data parsed:', serverData);
-
-        if (serverData.status === 'success') {
-          console.log("Authentication SUCCESS. Storing session and redirecting.");
-          login(serverData);
-          router.replace('/');
-        } else if (serverData.status === 'fail') {
-          console.error("Authentication FAIL. Reason:", serverData.purpose);
-          toast({
-            variant: "destructive",
-            title: "Authentication Failed",
-            description: serverData.purpose || "An unknown error occurred on the server.",
-          });
-          setTimeout(() => {
-            logout();
-            router.replace('/login');
-          }, 3000);
-        }
-      } else {
-         console.log("Received message, but data format is not recognized:", event.data);
-      }
-    };
-    
-    console.log('Adding window message event listener.');
-    window.addEventListener('message', handleMessage);
-
-    return () => {
-      console.log('--- REMOVING window message event listener ---');
-      window.removeEventListener('message', handleMessage);
-    };
-  }, [login, logout, router, toast]);
 
   useEffect(() => {
     const isVerifying = searchParams.has('verification');
