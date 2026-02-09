@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -29,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const isAuthenticated = !!user;
 
+  // This function is for manual logins if needed, but the primary logic is in the effect.
   const login = useCallback(
     (sessionData: UserSession) => {
       try {
@@ -62,14 +64,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('--- WIDE-OPEN LISTENER: Message received ---');
       console.log('--- Origin:', event.origin);
       try {
-          const dataPreview = typeof event.data === 'string' ? event.data.substring(0, 200) + '...' : event.data;
-          console.log('--- Data Preview:', dataPreview);
+        const dataPreview =
+          typeof event.data === 'string'
+            ? event.data.substring(0, 200) + '...'
+            : JSON.stringify(event.data);
+        console.log('--- Data Preview:', dataPreview);
       } catch {
-          console.log('--- Could not preview data.');
+        console.log('--- Could not preview data.');
       }
 
       const expectedOrigin = 'https://mystaffpro.com';
       if (event.origin !== expectedOrigin) {
+        // Silently ignore messages from other origins.
         return;
       }
 
@@ -85,30 +91,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.status === 'success' && data.session) {
-        console.log('--- AUTH PROVIDER: SUCCESS message received. Calling login()...');
-        login(data as UserSession);
+        console.log(
+          '--- AUTH PROVIDER: SUCCESS message received. Logging in directly...'
+        );
+        try {
+          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
+          // Force a full page reload to ensure a clean state
+          window.location.assign('/');
+        } catch (error) {
+          console.error(
+            'Could not access local storage to save session:',
+            error
+          );
+          // We can't use the toast hook here directly, but we can alert the user.
+          alert('Login Error: Could not save session to device.');
+        }
       } else if (data.status === 'fail') {
         console.log('--- AUTH PROVIDER: FAIL message received. Toasting...');
-        toast({
-          variant: 'destructive',
-          title: 'Authentication Failed',
-          description:
-            data.purpose || 'An unknown error occurred on the server.',
-        });
+        // We can't use the toast hook directly, but we can show an alert.
+        alert(
+          `Authentication Failed: ${
+            data.purpose || 'An unknown error occurred on the server.'
+          }`
+        );
       } else {
         console.log('--- AUTH PROVIDER: Unknown message format. IGNORING.');
       }
     };
-    
+
     console.log('--- AUTH PROVIDER: ADDING STABLE GLOBAL LISTENER ---');
     window.addEventListener('message', handleServerMessage);
 
+    // The empty dependency array [] GUARANTEES this effect runs only ONCE.
+    // The listener will only be removed if the AuthProvider itself is ever unmounted.
     return () => {
       console.log('--- AUTH PROVIDER: REMOVING STABLE GLOBAL LISTENER ---');
       window.removeEventListener('message', handleServerMessage);
     };
-  }, [login, logout, toast]);
-
+  }, []);
 
   useEffect(() => {
     try {
