@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import WebView from '@/components/web-view';
@@ -22,55 +22,79 @@ function MainPage() {
   const { user, isAuthenticated, isLoading: isAuthLoading, login, logout } = useAuth();
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  const router = useRouter();
 
+  // Refs to hold the latest versions of the functions from hooks.
+  // This allows us to use them in a stable `useEffect` listener.
+  const loginRef = useRef(login);
+  const logoutRef = useRef(logout);
+  const toastRef = useRef(toast);
+
+  // Keep the refs updated on every render.
+  useEffect(() => {
+    loginRef.current = login;
+    logoutRef.current = logout;
+    toastRef.current = toast;
+  }, [login, logout, toast]);
+  
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
 
-  // This listener is now specifically tied to the verification flow.
+  // This `useEffect` now has stable dependencies and will only run when `isVerifying` changes.
+  // This creates a persistent listener for the duration of the verification flow.
   useEffect(() => {
     if (!isVerifying) {
       return;
     }
 
     const handleServerMessage = (event: MessageEvent) => {
+      console.log('--- MESSAGE RECEIVED ---');
+      console.log('--- Origin:', event.origin);
+      console.log('--- Data:', event.data);
+      
       const expectedOrigin = new URL(baseUrl).origin;
-      // IMPORTANT: Always verify the origin of the message for security
       if (event.origin !== expectedOrigin) {
+        console.log(`--- Origin mismatch. Expected: ${expectedOrigin}, Received: ${event.origin}. IGNORING.`);
         return;
       }
+      console.log('--- Origin matched. Processing message...');
 
       let data;
       try {
         data = JSON.parse(event.data);
+        console.log('--- Parsed data:', data);
       } catch (e) {
-        // Ignore messages that are not valid JSON
+        console.log('--- FAILED TO PARSE JSON. IGNORING.', e);
         return;
       }
 
       if (data.status === 'success' && data.session) {
-        login(data as UserSession);
+        console.log('--- SUCCESS message received. Calling login()...');
+        loginRef.current(data as UserSession);
       } else if (data.status === 'fail') {
-        toast({
+        console.log('--- FAIL message received. Toasting and logging out...');
+        toastRef.current({
           variant: 'destructive',
           title: 'Authentication Failed',
           description:
             data.purpose || 'An unknown error occurred on the server.',
         });
-        // On failure, logout() will redirect to the login page.
-        logout();
+        logoutRef.current();
+      } else {
+        console.log('--- Unknown message format. IGNORING.');
       }
     };
-
+    
+    console.log('--- ADDING STABLE MESSAGE LISTENER ---');
     window.addEventListener('message', handleServerMessage);
 
-    // Cleanup function to remove the listener when the component unmounts
+    // Cleanup function to remove the listener when the component unmounts or `isVerifying` becomes false.
     return () => {
+      console.log('--- REMOVING STABLE MESSAGE LISTENER ---');
       window.removeEventListener('message', handleServerMessage);
     };
-  }, [isVerifying, login, logout, toast, baseUrl]);
+  }, [isVerifying, baseUrl]);
 
 
   // This effect handles redirecting unauthenticated users to the login page.
@@ -79,6 +103,7 @@ function MainPage() {
     if (isAuthLoading || isAuthenticated || isVerifying) {
       return;
     }
+    // Use a hard redirect to ensure a clean state.
     window.location.assign('/login');
   }, [isAuthLoading, isAuthenticated, isVerifying]);
 
@@ -117,6 +142,7 @@ function MainPage() {
         <CodeVerificationOverlay
           email={emailForVerification}
           onBack={() => {
+            // Use a hard redirect to prevent "ghost" iframe reloads.
             window.location.assign('/login');
           }}
         />
