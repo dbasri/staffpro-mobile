@@ -34,7 +34,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
         setUser(sessionData);
-        // A full page reload is the most robust way to ensure a clean state
         window.location.assign('/');
       } catch (error) {
         console.error('Could not access local storage to save session:', error);
@@ -55,22 +54,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Could not access local storage to remove session:', error);
     }
     setUser(null);
-    // A full page reload ensures a clean state and redirects to login
     window.location.assign('/login');
   }, []);
 
-  // This stable, global listener is added once and is always active.
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
-      console.log('--- AUTH PROVIDER: MESSAGE RECEIVED ---');
+      console.log('--- WIDE-OPEN LISTENER: Message received ---');
       console.log('--- Origin:', event.origin);
-      console.log('--- Data:', event.data);
+      try {
+          const dataPreview = typeof event.data === 'string' ? event.data.substring(0, 200) + '...' : event.data;
+          console.log('--- Data Preview:', dataPreview);
+      } catch {
+          console.log('--- Could not preview data.');
+      }
 
       const expectedOrigin = 'https://mystaffpro.com';
       if (event.origin !== expectedOrigin) {
-        console.log(`--- AUTH PROVIDER: Origin mismatch. Expected: ${expectedOrigin}. IGNORING.`);
         return;
       }
+
       console.log('--- AUTH PROVIDER: Origin matched. Processing message...');
 
       let data;
@@ -86,14 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('--- AUTH PROVIDER: SUCCESS message received. Calling login()...');
         login(data as UserSession);
       } else if (data.status === 'fail') {
-        console.log('--- AUTH PROVIDER: FAIL message received. Toasting and logging out...');
+        console.log('--- AUTH PROVIDER: FAIL message received. Toasting...');
         toast({
           variant: 'destructive',
           title: 'Authentication Failed',
           description:
             data.purpose || 'An unknown error occurred on the server.',
         });
-        logout();
       } else {
         console.log('--- AUTH PROVIDER: Unknown message format. IGNORING.');
       }
@@ -109,7 +110,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [login, logout, toast]);
 
 
-  // Load user from localStorage on initial load.
   useEffect(() => {
     try {
       const sessionString = localStorage.getItem(SESSION_STORAGE_KEY);

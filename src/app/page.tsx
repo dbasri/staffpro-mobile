@@ -7,7 +7,6 @@ import WebView from '@/components/web-view';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CodeVerificationOverlay from '@/components/auth/code-verification-overlay';
-import type { UserSession } from '@/types/session';
 
 function GlobalLoader() {
   return (
@@ -20,23 +19,19 @@ function GlobalLoader() {
 function MainPage() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   const searchParams = useSearchParams();
-  
+
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
-  
+
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
 
-  // This effect handles redirecting unauthenticated users to the login page.
   useEffect(() => {
-    // Don't redirect if we are loading, already authenticated, or in a verification flow
     if (isAuthLoading || isAuthenticated || isVerifying) {
       return;
     }
-    // Use a hard redirect to ensure a clean state.
     window.location.assign('/login');
   }, [isAuthLoading, isAuthenticated, isVerifying]);
 
-  // Render based on the current, stable state.
   if (isAuthLoading) {
     return <GlobalLoader />;
   }
@@ -47,9 +42,7 @@ function MainPage() {
       <main className="relative h-screen">
         <WebView url={webViewUrl} />
         <Button
-          onClick={() => {
-            logout();
-          }}
+          onClick={logout}
           className="absolute bottom-4 right-4 z-20 shadow-lg"
           variant="destructive"
         >
@@ -60,7 +53,6 @@ function MainPage() {
   }
 
   if (isVerifying && emailForVerification) {
-    // We only pass 'verification' and 'email' to the initial iframe URL
     const params = new URLSearchParams({
       verification: 'true',
       email: emailForVerification,
@@ -71,7 +63,6 @@ function MainPage() {
         <CodeVerificationOverlay
           email={emailForVerification}
           onBack={() => {
-            // Use a hard redirect to prevent "ghost" iframe reloads.
             window.location.assign('/login');
           }}
         />
@@ -80,7 +71,6 @@ function MainPage() {
     );
   }
 
-  // Default to loader while figuring out where to go.
   return <GlobalLoader />;
 }
 
