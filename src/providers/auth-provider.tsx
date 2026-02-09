@@ -30,7 +30,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const isAuthenticated = !!user;
 
-  // This function is for manual logins if needed, but the primary logic is in the effect.
   const login = useCallback(
     (sessionData: UserSession) => {
       try {
@@ -60,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    console.log('--- AUTH PROVIDER: ADDING STABLE GLOBAL LISTENER ---');
+
     const handleServerMessage = (event: MessageEvent) => {
       console.log('--- WIDE-OPEN LISTENER: Message received ---');
       console.log('--- Origin:', event.origin);
@@ -75,7 +76,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const expectedOrigin = 'https://mystaffpro.com';
       if (event.origin !== expectedOrigin) {
-        // Silently ignore messages from other origins.
         return;
       }
 
@@ -92,23 +92,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data.status === 'success' && data.session) {
         console.log(
-          '--- AUTH PROVIDER: SUCCESS message received. Logging in directly...'
+          '--- AUTH PROVIDER: SUCCESS message received. Saving session and reloading...'
         );
         try {
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
-          // Force a full page reload to ensure a clean state
           window.location.assign('/');
         } catch (error) {
           console.error(
             'Could not access local storage to save session:',
             error
           );
-          // We can't use the toast hook here directly, but we can alert the user.
           alert('Login Error: Could not save session to device.');
         }
       } else if (data.status === 'fail') {
-        console.log('--- AUTH PROVIDER: FAIL message received. Toasting...');
-        // We can't use the toast hook directly, but we can show an alert.
+        console.log('--- AUTH PROVIDER: FAIL message received. Alerting user...');
         alert(
           `Authentication Failed: ${
             data.purpose || 'An unknown error occurred on the server.'
@@ -119,11 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    console.log('--- AUTH PROVIDER: ADDING STABLE GLOBAL LISTENER ---');
     window.addEventListener('message', handleServerMessage);
 
-    // The empty dependency array [] GUARANTEES this effect runs only ONCE.
-    // The listener will only be removed if the AuthProvider itself is ever unmounted.
     return () => {
       console.log('--- AUTH PROVIDER: REMOVING STABLE GLOBAL LISTENER ---');
       window.removeEventListener('message', handleServerMessage);
