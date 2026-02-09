@@ -45,16 +45,6 @@ export default function CodeVerificationOverlay({
   });
 
   const handleVerifySubmit = (data: CodeVerificationFormValues) => {
-    // DIAGNOSTIC: Fire a fake postMessage to test the listener
-    console.log('--- FIRING INTERNAL TEST postMessage ---');
-    const testPayload = {
-      status: 'success',
-      email: 'test@internal.com',
-      session: 'internal-test-session',
-      purpose: 'Internal Diagnostic Test',
-    };
-    window.postMessage(JSON.stringify(testPayload), '*');
-
     // This submits the code to the iframe by reloading it.
     // The server-side script in the iframe will then post a message back to the app.
     const webview = document.querySelector('iframe');
@@ -64,6 +54,7 @@ export default function CodeVerificationOverlay({
         verification: 'true',
         email: email,
         code: data.code,
+        origin: window.location.origin, // Pass client origin to server
       });
       webview.src = `${baseUrl}?${params.toString()}`;
     }

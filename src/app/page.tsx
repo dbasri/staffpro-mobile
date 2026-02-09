@@ -57,7 +57,10 @@ function MainPage() {
       verification: 'true',
       email: emailForVerification,
     });
-    const webViewUrl = `${baseUrl}?${params.toString()}`;
+    
+    // Pass the client's origin to the server
+    const webViewUrl = `${baseUrl}?${params.toString()}&origin=${window.location.origin}`;
+    
     return (
       <main className="relative h-screen">
         <CodeVerificationOverlay
