@@ -22,19 +22,23 @@ function MainPage() {
   const { user, isAuthenticated, isLoading: isAuthLoading, login, logout } = useAuth();
   const { toast } = useToast();
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
+  
+  const baseUrl = "https://mystaffpro.com/v6/m_mobile";
 
-  // Add the message listener here, tied to the verification flow.
+  // This listener is now specifically tied to the verification flow.
   useEffect(() => {
     if (!isVerifying) {
       return;
     }
 
     const handleServerMessage = (event: MessageEvent) => {
+      const expectedOrigin = new URL(baseUrl).origin;
       // IMPORTANT: Always verify the origin of the message for security
-      if (event.origin !== 'https://mystaffpro.com') {
+      if (event.origin !== expectedOrigin) {
         return;
       }
 
@@ -66,7 +70,7 @@ function MainPage() {
     return () => {
       window.removeEventListener('message', handleServerMessage);
     };
-  }, [isVerifying, login, logout, toast]);
+  }, [isVerifying, login, logout, toast, baseUrl]);
 
 
   // This effect handles redirecting unauthenticated users to the login page.
@@ -84,7 +88,6 @@ function MainPage() {
   }
 
   if (isAuthenticated) {
-    const baseUrl = "https://mystaffpro.com/v6/m_mobile";
     const webViewUrl = `${baseUrl}?session=${user!.session}&email=${user!.email}`;
     return (
       <main className="relative h-screen">
@@ -103,7 +106,6 @@ function MainPage() {
   }
 
   if (isVerifying && emailForVerification) {
-    const baseUrl = "https://mystaffpro.com/v6/m_mobile";
     // We only pass 'verification' and 'email' to the initial iframe URL
     const params = new URLSearchParams({
       verification: 'true',
