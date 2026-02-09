@@ -59,6 +59,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.assign('/login');
   }, []);
 
+  // This stable, global listener is added once and is always active.
+  useEffect(() => {
+    const handleServerMessage = (event: MessageEvent) => {
+      console.log('--- AUTH PROVIDER: MESSAGE RECEIVED ---');
+      console.log('--- Origin:', event.origin);
+      console.log('--- Data:', event.data);
+
+      const expectedOrigin = 'https://mystaffpro.com';
+      if (event.origin !== expectedOrigin) {
+        console.log(`--- AUTH PROVIDER: Origin mismatch. Expected: ${expectedOrigin}. IGNORING.`);
+        return;
+      }
+      console.log('--- AUTH PROVIDER: Origin matched. Processing message...');
+
+      let data;
+      try {
+        data = JSON.parse(event.data);
+        console.log('--- AUTH PROVIDER: Parsed data:', data);
+      } catch (e) {
+        console.log('--- AUTH PROVIDER: FAILED TO PARSE JSON. IGNORING.', e);
+        return;
+      }
+
+      if (data.status === 'success' && data.session) {
+        console.log('--- AUTH PROVIDER: SUCCESS message received. Calling login()...');
+        login(data as UserSession);
+      } else if (data.status === 'fail') {
+        console.log('--- AUTH PROVIDER: FAIL message received. Toasting and logging out...');
+        toast({
+          variant: 'destructive',
+          title: 'Authentication Failed',
+          description:
+            data.purpose || 'An unknown error occurred on the server.',
+        });
+        logout();
+      } else {
+        console.log('--- AUTH PROVIDER: Unknown message format. IGNORING.');
+      }
+    };
+    
+    console.log('--- AUTH PROVIDER: ADDING STABLE GLOBAL LISTENER ---');
+    window.addEventListener('message', handleServerMessage);
+
+    return () => {
+      console.log('--- AUTH PROVIDER: REMOVING STABLE GLOBAL LISTENER ---');
+      window.removeEventListener('message', handleServerMessage);
+    };
+  }, [login, logout, toast]);
+
+
   // Load user from localStorage on initial load.
   useEffect(() => {
     try {
