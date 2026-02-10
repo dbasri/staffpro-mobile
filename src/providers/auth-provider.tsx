@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -41,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (sessionData: UserSession) => {
       try {
         localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
-        setUser(sessionData); // Let React handle the re-render
+        setUser(sessionData);
       } catch (error) {
         console.error('Could not access local storage to save session:', error);
         toast({
@@ -68,43 +67,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('--- AUTH PROVIDER: ADDING STABLE GLOBAL LISTENER ---');
 
     const handleServerMessage = (event: MessageEvent) => {
-      console.log('--- WIDE-OPEN LISTENER: Message received ---');
-      console.log('--- Origin:', event.origin);
-      try {
-        const dataPreview =
-          typeof event.data === 'string'
-            ? event.data.substring(0, 200) + '...'
-            : JSON.stringify(event.data);
-        console.log('--- Data Preview:', dataPreview);
-      } catch {
-        console.log('--- Could not preview data.');
-      }
-
       const expectedOrigin = 'https://mystaffpro.com';
-      if (event.origin !== expectedOrigin) {
-        console.log(`--- AUTH PROVIDER: Origin MISMATCH. Expected ${expectedOrigin}, got ${event.origin}. IGNORING.`);
+      // Use a wildcard '*' for the expectedOrigin for local development if needed,
+      // but the specific origin is required for production security.
+      if (expectedOrigin !== '*' && event.origin !== expectedOrigin) {
         return;
       }
-
-      console.log('--- AUTH PROVIDER: Origin matched. Processing message...');
-
+      
       let data;
       try {
         data = JSON.parse(event.data);
-        console.log('--- AUTH PROVIDER: Parsed data:', data);
       } catch (e) {
-        console.log('--- AUTH PROVIDER: FAILED TO PARSE JSON. IGNORING.', e);
+        console.error('--- AUTH PROVIDER: FAILED TO PARSE JSON ---', event.data);
         return;
       }
 
-      if (data.status === 'success' && data.session) {
-        console.log(
-          '--- AUTH PROVIDER: SUCCESS message received. Updating session state...'
-        );
+      if (data.status === 'success' && data.purpose === 'Authenticated' && data.session) {
+        console.log('--- AUTH PROVIDER: AUTHENTICATED message received. Updating session state...');
         try {
-          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
           // Use the ref to call the latest setUser, triggering a graceful re-render
           setUserRef.current(data);
+          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
         } catch (error) {
           console.error(
             'Could not access local storage to save session:',
@@ -112,6 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           );
           alert('Login Error: Could not save session to device.');
         }
+      } else if (data.status === 'success' && data.purpose === 'Send verify code email') {
+        console.log('--- AUTH PROVIDER: "Email sent" confirmation received. No action needed.');
+        // This is expected. We just wait for the user to enter the code.
       } else if (data.status === 'fail') {
         console.log('--- AUTH PROVIDER: FAIL message received. Alerting user...');
         alert(
@@ -120,7 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }`
         );
       } else {
-        console.log('--- AUTH PROVIDER: Unknown message format. IGNORING.');
+        // This can be noisy if other scripts use postMessage. Use console.debug if needed.
+        // console.warn('--- AUTH PROVIDER: Unknown message format or purpose received. IGNORING.', data);
       }
     };
 
@@ -137,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const sessionString = localStorage.getItem(SESSION_STORAGE_KEY);
       if (sessionString) {
         const session = JSON.parse(sessionString);
-        if (session.status === 'success') {
+        if (session.status === 'success' && session.purpose === 'Authenticated') {
           setUser(session);
         }
       }
@@ -155,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: 'passkey-user@example.com',
       name: 'Passkey User',
       session: 'mock-session-id-passkey',
-      purpose: 'Passkey login successful',
+      purpose: 'Authenticated',
     };
     login(mockSession);
   }, [login]);
