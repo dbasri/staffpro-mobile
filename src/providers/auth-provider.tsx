@@ -7,6 +7,7 @@ import {
   createContext,
   type ReactNode,
   useCallback,
+  useRef,
 } from 'react';
 import type { UserSession } from '@/types/session';
 import { useToast } from '@/hooks/use-toast';
@@ -30,12 +31,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const isAuthenticated = !!user;
 
+  // Use a ref to allow the stable listener to call the latest setUser function
+  const setUserRef = useRef(setUser);
+  useEffect(() => {
+    setUserRef.current = setUser;
+  });
+
   const login = useCallback(
     (sessionData: UserSession) => {
       try {
         localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
-        setUser(sessionData);
-        window.location.assign('/');
+        setUser(sessionData); // Let React handle the re-render
       } catch (error) {
         console.error('Could not access local storage to save session:', error);
         toast({
@@ -51,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
-    } catch (error) {
+    } catch (error)      {
       console.error('Could not access local storage to remove session:', error);
     }
     setUser(null);
@@ -76,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const expectedOrigin = 'https://mystaffpro.com';
       if (event.origin !== expectedOrigin) {
+        console.log(`--- AUTH PROVIDER: Origin MISMATCH. Expected ${expectedOrigin}, got ${event.origin}. IGNORING.`);
         return;
       }
 
@@ -92,11 +99,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data.status === 'success' && data.session) {
         console.log(
-          '--- AUTH PROVIDER: SUCCESS message received. Saving session and reloading...'
+          '--- AUTH PROVIDER: SUCCESS message received. Updating session state...'
         );
         try {
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
-          window.location.assign('/');
+          // Use the ref to call the latest setUser, triggering a graceful re-render
+          setUserRef.current(data);
         } catch (error) {
           console.error(
             'Could not access local storage to save session:',
@@ -122,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('--- AUTH PROVIDER: REMOVING STABLE GLOBAL LISTENER ---');
       window.removeEventListener('message', handleServerMessage);
     };
-  }, []);
+  }, []); // Empty dependency array ensures this runs only ONCE.
 
   useEffect(() => {
     try {
