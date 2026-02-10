@@ -30,10 +30,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const isAuthenticated = !!user;
 
-  // Use a ref to allow the stable listener to call the latest setUser function
+  // Use refs to allow the stable listener to call the latest functions
   const setUserRef = useRef(setUser);
+  const toastRef = useRef(toast);
   useEffect(() => {
     setUserRef.current = setUser;
+    toastRef.current = toast;
   });
 
   const login = useCallback(
@@ -68,9 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const handleServerMessage = (event: MessageEvent) => {
       const expectedOrigin = 'https://mystaffpro.com';
-      // Use a wildcard '*' for the expectedOrigin for local development if needed,
-      // but the specific origin is required for production security.
-      if (expectedOrigin !== '*' && event.origin !== expectedOrigin) {
+      // For security, only process messages from the expected origin.
+      // The server-side postMessage call MUST use a specific targetOrigin, not '*'.
+      if (event.origin !== expectedOrigin) {
         return;
       }
       
@@ -82,10 +84,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (data.status === 'success' && data.purpose === 'Authenticated' && data.session) {
+      if (data.status === 'success' && data.purpose === 'Authenticated') {
         console.log('--- AUTH PROVIDER: AUTHENTICATED message received. Updating session state...');
         try {
-          // Use the ref to call the latest setUser, triggering a graceful re-render
           setUserRef.current(data);
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
         } catch (error) {
@@ -93,21 +94,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             'Could not access local storage to save session:',
             error
           );
-          alert('Login Error: Could not save session to device.');
+          toastRef.current({
+            variant: 'destructive',
+            title: 'Login Error',
+            description: 'Could not save session to device.',
+          });
         }
       } else if (data.status === 'success' && data.purpose === 'Send verify code email') {
         console.log('--- AUTH PROVIDER: "Email sent" confirmation received. No action needed.');
         // This is expected. We just wait for the user to enter the code.
       } else if (data.status === 'fail') {
         console.log('--- AUTH PROVIDER: FAIL message received. Alerting user...');
-        alert(
-          `Authentication Failed: ${
-            data.purpose || 'An unknown error occurred on the server.'
-          }`
-        );
-      } else {
-        // This can be noisy if other scripts use postMessage. Use console.debug if needed.
-        // console.warn('--- AUTH PROVIDER: Unknown message format or purpose received. IGNORING.', data);
+        
+        const description = data.purpose || 'An unknown error occurred on the server.';
+        
+        toastRef.current({
+            variant: 'destructive',
+            title: 'Authentication Failed',
+            description: description,
+        });
+    
+        // If verification code failed, redirect to login as codes are single-use
+        if (description.includes('Verify') || description.includes('Verification')) {
+            // Use a timeout to allow the user to read the toast message before redirecting
+            setTimeout(() => {
+                window.location.assign('/login');
+            }, 3000); // 3-second delay
+        }
       }
     };
 
