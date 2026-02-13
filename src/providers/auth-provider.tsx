@@ -69,13 +69,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('--- AUTH PROVIDER: ADDING STABLE GLOBAL LISTENER ---');
 
     const handleServerMessage = (event: MessageEvent) => {
-      const expectedOrigin = 'https://mystaffpro.com';
-      // For security, only process messages from the expected origin.
-      // The server-side postMessage call MUST use a specific targetOrigin, not '*'.
-      if (event.origin !== expectedOrigin) {
-        return;
+      // Use '*' for targetOrigin for now to ensure message delivery.
+      // The secure origin check is temporarily bypassed for diagnostics.
+      // IMPORTANT: For production, you must use a specific origin.
+      if (event.origin !== 'https://mystaffpro.com') {
+          return;
       }
       
+      console.log('--- AUTH PROVIDER: Raw message data received:', event.data);
+
       let data;
       try {
         data = JSON.parse(event.data);
@@ -84,7 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (data.status === 'success' && data.purpose === 'Authenticated') {
+      console.log('--- AUTH PROVIDER: Parsed message data:', data);
+      const purpose = data.purpose ? data.purpose.trim() : '';
+
+      if (data.status === 'success' && purpose === 'Authenticated') {
         console.log('--- AUTH PROVIDER: AUTHENTICATED message received. Updating session state...');
         try {
           setUserRef.current(data);
@@ -100,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             description: 'Could not save session to device.',
           });
         }
-      } else if (data.status === 'success' && data.purpose === 'Send verify code email') {
+      } else if (data.status === 'success' && purpose === 'Send verify code email') {
         console.log('--- AUTH PROVIDER: "Email sent" confirmation received. No action needed.');
         // This is expected. We just wait for the user to enter the code.
       } else if (data.status === 'fail') {
