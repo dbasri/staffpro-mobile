@@ -19,59 +19,61 @@ function GlobalLoader() {
 function MainPage() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   const searchParams = useSearchParams();
-  const [currentUrl, setCurrentUrl] = useState<string | null>(null);
+  const [verificationCode, setVerificationCode] = useState<string | null>(null);
 
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
-
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
 
-  // Effect to set the correct URL based on auth state or verification flow
+  // Redirect to login if not authenticated or verifying
   useEffect(() => {
-    if (isAuthenticated && user) {
-      setCurrentUrl(`${baseUrl}?session=${user.session}&email=${user.email}`);
-    } else if (isVerifying && emailForVerification) {
-        const params = new URLSearchParams({
-          verification: 'true',
-          email: emailForVerification,
-        });
-        if (typeof window !== 'undefined') {
-          params.append('origin', window.location.origin);
-        }
-        setCurrentUrl(`${baseUrl}?${params.toString()}`);
+    if (!isAuthLoading && !isAuthenticated && !isVerifying) {
+      window.location.assign('/login');
     }
-  }, [isAuthenticated, user, isVerifying, emailForVerification, baseUrl]);
-
-
-  // Effect to redirect unauthenticated users to the login page
-  useEffect(() => {
-    if (isAuthLoading || isAuthenticated || isVerifying) {
-      return;
-    }
-    window.location.assign('/login');
   }, [isAuthLoading, isAuthenticated, isVerifying]);
 
+  // Handle code submission by updating state
   const handleCodeSubmit = (code: string) => {
-    if (emailForVerification) {
-        const params = new URLSearchParams({
-            verification: 'true',
-            email: emailForVerification,
-            code: code,
-            origin: window.location.origin,
-        });
-        setCurrentUrl(`${baseUrl}?${params.toString()}`);
-    }
+    setVerificationCode(code);
   };
+  
+  // Determine the URL based on the current state
+  let url: string | null = null;
+  if (isAuthenticated && user) {
+    // Final authenticated URL
+    const params = new URLSearchParams({
+      session: user.session,
+      email: user.email,
+      origin: window.location.origin,
+    });
+    url = `${baseUrl}?${params.toString()}`;
+  } else if (isVerifying && emailForVerification) {
+    // URL for verification flow
+    const params = new URLSearchParams({
+      verification: 'true',
+      email: emailForVerification,
+      origin: window.location.origin,
+    });
+    if (verificationCode) {
+      params.append('code', verificationCode);
+    }
+    url = `${baseUrl}?${params.toString()}`;
+  }
 
+  // Render logic based on application state
   if (isAuthLoading) {
     return <GlobalLoader />;
   }
 
+  if (url === null) {
+      // This can happen briefly before the redirect effect kicks in
+      return <GlobalLoader />;
+  }
+  
   if (isAuthenticated) {
-    if (!currentUrl) return <GlobalLoader />;
     return (
       <main className="relative h-screen">
-        <WebView url={currentUrl} />
+        <WebView url={url} />
         <Button
           onClick={logout}
           className="absolute bottom-4 right-4 z-20 shadow-lg"
@@ -83,22 +85,19 @@ function MainPage() {
     );
   }
 
-  if (isVerifying && emailForVerification) {
-    if (!currentUrl) return <GlobalLoader />;
+  if (isVerifying) {
     return (
       <main className="relative h-screen">
         <CodeVerificationOverlay
-          email={emailForVerification}
-          onBack={() => {
-            window.location.assign('/login');
-          }}
+          email={emailForVerification!}
+          onBack={() => window.location.assign('/login')}
           onVerify={handleCodeSubmit}
         />
-        <WebView url={currentUrl} />
+        <WebView url={url} />
       </main>
     );
   }
-
+  
   return <GlobalLoader />;
 }
 
