@@ -23,6 +23,7 @@ interface AuthContextType {
 export const AuthContext = createContext<AuthContextType | null>(null);
 
 const SESSION_STORAGE_KEY = 'staffpro-session';
+const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null);
@@ -58,8 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
-    } catch (error)      {
-      console.error('Could not access local storage to remove session:', error);
+      localStorage.removeItem(EMAIL_STORAGE_KEY);
+    } catch (error) {
+      console.error('Could not access local storage to clear session:', error);
     }
     setUser(null);
     window.location.assign('/login');
@@ -69,20 +71,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('--- AUTH PROVIDER: ADDING STABLE GLOBAL LISTENER ---');
 
     const handleServerMessage = (event: MessageEvent) => {
-      // Use '*' for targetOrigin for now to ensure message delivery.
-      // The secure origin check is temporarily bypassed for diagnostics.
       // IMPORTANT: For production, you must use a specific origin.
-      if (event.origin !== 'https://mystaffpro.com') {
-          return;
-      }
-      
+      // Using '*' is a temporary diagnostic step.
+      // if (event.origin !== 'https://mystaffpro.com') {
+      //     console.log('--- AUTH PROVIDER: Origin MISMATCH ---', 'Expected: https://mystaffpro.com', 'Received:', event.origin);
+      //     return;
+      // }
+
       console.log('--- AUTH PROVIDER: Raw message data received:', event.data);
 
       let data;
       try {
         data = JSON.parse(event.data);
       } catch (e) {
-        console.error('--- AUTH PROVIDER: FAILED TO PARSE JSON ---', event.data);
+        console.error(
+          '--- AUTH PROVIDER: FAILED TO PARSE JSON ---',
+          event.data
+        );
         return;
       }
 
@@ -90,7 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const purpose = data.purpose ? data.purpose.trim() : '';
 
       if (data.status === 'success' && purpose === 'Authenticated') {
-        console.log('--- AUTH PROVIDER: AUTHENTICATED message received. Updating session state...');
+        console.log(
+          '--- AUTH PROVIDER: AUTHENTICATED message received. Updating session state...'
+        );
         try {
           setUserRef.current(data);
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
@@ -105,26 +112,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             description: 'Could not save session to device.',
           });
         }
-      } else if (data.status === 'success' && purpose === 'Send verify code email') {
-        console.log('--- AUTH PROVIDER: "Email sent" confirmation received. No action needed.');
+      } else if (
+        data.status === 'success' &&
+        purpose === 'Send verify code email'
+      ) {
+        console.log(
+          '--- AUTH PROVIDER: "Email sent" confirmation received. No action needed.'
+        );
         // This is expected. We just wait for the user to enter the code.
       } else if (data.status === 'fail') {
-        console.log('--- AUTH PROVIDER: FAIL message received. Alerting user...');
-        
-        const description = data.purpose || 'An unknown error occurred on the server.';
-        
+        console.log(
+          '--- AUTH PROVIDER: FAIL message received. Alerting user...'
+        );
+
+        const description =
+          data.purpose || 'An unknown error occurred on the server.';
+
         toastRef.current({
-            variant: 'destructive',
-            title: 'Authentication Failed',
-            description: description,
+          variant: 'destructive',
+          title: 'Authentication Failed',
+          description: description,
         });
-    
+
         // If verification code failed, redirect to login as codes are single-use
-        if (description.includes('Verify') || description.includes('Verification')) {
-            // Use a timeout to allow the user to read the toast message before redirecting
-            setTimeout(() => {
-                window.location.assign('/login');
-            }, 3000); // 3-second delay
+        if (purpose.includes('Verify') || purpose.includes('Verification')) {
+          // Use a timeout to allow the user to read the toast message before redirecting
+          setTimeout(() => {
+            window.location.assign('/login');
+          }, 3000); // 3-second delay
         }
       }
     };
@@ -142,7 +157,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const sessionString = localStorage.getItem(SESSION_STORAGE_KEY);
       if (sessionString) {
         const session = JSON.parse(sessionString);
-        if (session.status === 'success' && session.purpose === 'Authenticated') {
+        if (
+          session.status === 'success' &&
+          session.purpose === 'Authenticated'
+        ) {
           setUser(session);
         }
       }
