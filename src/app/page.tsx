@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import WebView from '@/components/web-view';
@@ -32,12 +32,32 @@ function MainPage() {
     window.location.assign('/login');
   }, [isAuthLoading, isAuthenticated, isVerifying]);
 
+  const webViewUrl = useMemo(() => {
+    if (!isAuthenticated || !user) return null;
+    return `${baseUrl}?session=${user.session}&email=${user.email}`;
+  }, [isAuthenticated, user]);
+
+  const verificationWebViewUrl = useMemo(() => {
+    if (!isVerifying || !emailForVerification) return null;
+
+    const params = new URLSearchParams({
+      verification: 'true',
+      email: emailForVerification,
+    });
+
+    // This is safe because MainPage is a client component
+    const origin = window.location.origin;
+    params.append('origin', origin);
+
+    return `${baseUrl}?${params.toString()}`;
+  }, [isVerifying, emailForVerification]);
+
   if (isAuthLoading) {
     return <GlobalLoader />;
   }
 
   if (isAuthenticated) {
-    const webViewUrl = `${baseUrl}?session=${user!.session}&email=${user!.email}`;
+    if (!webViewUrl) return <GlobalLoader />;
     return (
       <main className="relative h-screen">
         <WebView url={webViewUrl} />
@@ -53,14 +73,7 @@ function MainPage() {
   }
 
   if (isVerifying && emailForVerification) {
-    const params = new URLSearchParams({
-      verification: 'true',
-      email: emailForVerification,
-    });
-    
-    // Pass the client's origin to the server
-    const webViewUrl = `${baseUrl}?${params.toString()}&origin=${window.location.origin}`;
-    
+    if (!verificationWebViewUrl) return <GlobalLoader />;
     return (
       <main className="relative h-screen">
         <CodeVerificationOverlay
@@ -69,7 +82,7 @@ function MainPage() {
             window.location.assign('/login');
           }}
         />
-        <WebView url={webViewUrl} />
+        <WebView url={verificationWebViewUrl} />
       </main>
     );
   }

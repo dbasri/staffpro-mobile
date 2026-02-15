@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
 interface WebViewProps {
   url: string;
 }
 
-export default function WebView({ url }: WebViewProps) {
+function WebView({ url }: WebViewProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   const handleLoad = () => {
@@ -30,3 +30,5 @@ export default function WebView({ url }: WebViewProps) {
     </div>
   );
 }
+
+export default memo(WebView);
