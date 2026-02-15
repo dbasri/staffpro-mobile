@@ -43,10 +43,8 @@ export function LoginForm() {
   useEffect(() => {
     if (showVerificationForm) {
       try {
-        const storedEmail = localStorage.getItem(EMAIL_STORAGE_KEY);
-        if (storedEmail) {
-          form.setValue('email', storedEmail);
-        }
+        const storedEmail = localStorage.getItem(EMAIL_STORAGE_KEY) || '';
+        form.reset({ email: storedEmail }); // Use reset for more robust update
       } catch (error) {
         console.error('Could not access local storage for email:', error);
       }
