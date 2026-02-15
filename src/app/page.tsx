@@ -37,20 +37,20 @@ function MainPage() {
     return `${baseUrl}?session=${user.session}&email=${user.email}`;
   }, [isAuthenticated, user]);
 
-  const verificationWebViewUrl = useMemo(() => {
-    if (!isVerifying || !emailForVerification) return null;
-
+  let verificationWebViewUrl: string | null = null;
+  if (isVerifying && emailForVerification) {
     const params = new URLSearchParams({
       verification: 'true',
       email: emailForVerification,
     });
-
+    
     // This is safe because MainPage is a client component
-    const origin = window.location.origin;
-    params.append('origin', origin);
-
-    return `${baseUrl}?${params.toString()}`;
-  }, [isVerifying, emailForVerification]);
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin;
+      params.append('origin', origin);
+      verificationWebViewUrl = `${baseUrl}?${params.toString()}`;
+    }
+  }
 
   if (isAuthLoading) {
     return <GlobalLoader />;

@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
 interface WebViewProps {
@@ -31,4 +31,4 @@ function WebView({ url }: WebViewProps) {
   );
 }
 
-export default memo(WebView);
+export default WebView;
