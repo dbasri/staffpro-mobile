@@ -59,7 +59,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
-      localStorage.removeItem(EMAIL_STORAGE_KEY);
     } catch (error) {
       console.error('Could not access local storage to clear session:', error);
     }
@@ -72,7 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const handleServerMessage = (event: MessageEvent) => {
       // IMPORTANT: For production, you must use a specific origin.
-      // Using '*' is a temporary diagnostic step.
       // if (event.origin !== 'https://mystaffpro.com') {
       //     console.log('--- AUTH PROVIDER: Origin MISMATCH ---', 'Expected: https://mystaffpro.com', 'Received:', event.origin);
       //     return;

@@ -33,9 +33,11 @@ type CodeVerificationFormValues = z.infer<typeof CodeVerificationSchema>;
 export default function CodeVerificationOverlay({
   email,
   onBack,
+  onVerify,
 }: {
   email: string;
   onBack: () => void;
+  onVerify: (code: string) => void;
 }) {
   const router = useRouter();
 
@@ -45,19 +47,7 @@ export default function CodeVerificationOverlay({
   });
 
   const handleVerifySubmit = (data: CodeVerificationFormValues) => {
-    // This submits the code to the iframe by reloading it.
-    // The server-side script in the iframe will then post a message back to the app.
-    const webview = document.querySelector('iframe');
-    if (webview && webview.contentWindow) {
-      const baseUrl = "https://mystaffpro.com/v6/m_mobile";
-      const params = new URLSearchParams({
-        verification: 'true',
-        email: email,
-        code: data.code,
-        origin: window.location.origin, // Pass client origin to server
-      });
-      webview.src = `${baseUrl}?${params.toString()}`;
-    }
+    onVerify(data.code);
   };
 
   return (

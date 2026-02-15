@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import WebView from '@/components/web-view';
@@ -19,12 +19,31 @@ function GlobalLoader() {
 function MainPage() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   const searchParams = useSearchParams();
+  const [currentUrl, setCurrentUrl] = useState<string | null>(null);
 
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
 
   const baseUrl = "https://mystaffpro.com/v6/m_mobile";
 
+  // Effect to set the correct URL based on auth state or verification flow
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      setCurrentUrl(`${baseUrl}?session=${user.session}&email=${user.email}`);
+    } else if (isVerifying && emailForVerification) {
+        const params = new URLSearchParams({
+          verification: 'true',
+          email: emailForVerification,
+        });
+        if (typeof window !== 'undefined') {
+          params.append('origin', window.location.origin);
+        }
+        setCurrentUrl(`${baseUrl}?${params.toString()}`);
+    }
+  }, [isAuthenticated, user, isVerifying, emailForVerification, baseUrl]);
+
+
+  // Effect to redirect unauthenticated users to the login page
   useEffect(() => {
     if (isAuthLoading || isAuthenticated || isVerifying) {
       return;
@@ -32,35 +51,27 @@ function MainPage() {
     window.location.assign('/login');
   }, [isAuthLoading, isAuthenticated, isVerifying]);
 
-  const webViewUrl = useMemo(() => {
-    if (!isAuthenticated || !user) return null;
-    return `${baseUrl}?session=${user.session}&email=${user.email}`;
-  }, [isAuthenticated, user]);
-
-  let verificationWebViewUrl: string | null = null;
-  if (isVerifying && emailForVerification) {
-    const params = new URLSearchParams({
-      verification: 'true',
-      email: emailForVerification,
-    });
-    
-    // This is safe because MainPage is a client component
-    if (typeof window !== 'undefined') {
-      const origin = window.location.origin;
-      params.append('origin', origin);
-      verificationWebViewUrl = `${baseUrl}?${params.toString()}`;
+  const handleCodeSubmit = (code: string) => {
+    if (emailForVerification) {
+        const params = new URLSearchParams({
+            verification: 'true',
+            email: emailForVerification,
+            code: code,
+            origin: window.location.origin,
+        });
+        setCurrentUrl(`${baseUrl}?${params.toString()}`);
     }
-  }
+  };
 
   if (isAuthLoading) {
     return <GlobalLoader />;
   }
 
   if (isAuthenticated) {
-    if (!webViewUrl) return <GlobalLoader />;
+    if (!currentUrl) return <GlobalLoader />;
     return (
       <main className="relative h-screen">
-        <WebView url={webViewUrl} />
+        <WebView url={currentUrl} />
         <Button
           onClick={logout}
           className="absolute bottom-4 right-4 z-20 shadow-lg"
@@ -73,7 +84,7 @@ function MainPage() {
   }
 
   if (isVerifying && emailForVerification) {
-    if (!verificationWebViewUrl) return <GlobalLoader />;
+    if (!currentUrl) return <GlobalLoader />;
     return (
       <main className="relative h-screen">
         <CodeVerificationOverlay
@@ -81,8 +92,9 @@ function MainPage() {
           onBack={() => {
             window.location.assign('/login');
           }}
+          onVerify={handleCodeSubmit}
         />
-        <WebView url={verificationWebViewUrl} />
+        <WebView url={currentUrl} />
       </main>
     );
   }
