@@ -1,11 +1,6 @@
 {
   "name": "StaffPro Mobile",
   "short_name": "StaffPro",
-  "description": "Secure Content Environment",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#83858A",
-  "theme_color": "#F5A623",
   "icons": [
     {
       "src": "/icons/icon-192x192.png",
@@ -17,5 +12,10 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "theme_color": "#F5A623",
+  "background_color": "#3A3F51",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait"
 }
