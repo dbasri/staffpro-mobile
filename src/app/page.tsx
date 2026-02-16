@@ -70,10 +70,19 @@ function MainPage() {
       return <GlobalLoader />;
   }
   
-  if (isAuthenticated) {
-    return (
-      <main className="relative h-screen">
-        <WebView key="staffpro-webview" url={url} />
+  return (
+    <main className="relative h-screen">
+      <WebView key="staffpro-webview" url={url} />
+      
+      {isVerifying && !isAuthenticated && (
+        <CodeVerificationOverlay
+          email={emailForVerification!}
+          onBack={() => window.location.assign('/login')}
+          onVerify={handleCodeSubmit}
+        />
+      )}
+
+      {isAuthenticated && (
         <Button
           onClick={logout}
           className="absolute bottom-4 right-4 z-20 shadow-lg"
@@ -81,24 +90,9 @@ function MainPage() {
         >
           Restart
         </Button>
-      </main>
-    );
-  }
-
-  if (isVerifying) {
-    return (
-      <main className="relative h-screen">
-        <CodeVerificationOverlay
-          email={emailForVerification!}
-          onBack={() => window.location.assign('/login')}
-          onVerify={handleCodeSubmit}
-        />
-        <WebView key="staffpro-webview" url={url} />
-      </main>
-    );
-  }
-  
-  return <GlobalLoader />;
+      )}
+    </main>
+  );
 }
 
 export default function Home() {
