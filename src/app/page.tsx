@@ -73,7 +73,7 @@ function MainPage() {
   if (isAuthenticated) {
     return (
       <main className="relative h-screen">
-        <WebView url={url} />
+        <WebView key="staffpro-webview" url={url} />
         <Button
           onClick={logout}
           className="absolute bottom-4 right-4 z-20 shadow-lg"
@@ -93,7 +93,7 @@ function MainPage() {
           onBack={() => window.location.assign('/login')}
           onVerify={handleCodeSubmit}
         />
-        <WebView url={url} />
+        <WebView key="staffpro-webview" url={url} />
       </main>
     );
   }
