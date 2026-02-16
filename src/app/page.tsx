@@ -7,6 +7,7 @@ import WebView from '@/components/web-view';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CodeVerificationOverlay from '@/components/auth/code-verification-overlay';
+import { staffproBaseUrl } from '@/lib/config';
 
 function GlobalLoader() {
   return (
@@ -23,8 +24,7 @@ function MainPage() {
 
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
-  const baseUrl = "https://mystaffpro.com/v6/m_mobile";
-
+  
   // Redirect to login if not authenticated or verifying
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated && !isVerifying) {
@@ -46,7 +46,7 @@ function MainPage() {
       email: user.email,
       origin: window.location.origin,
     });
-    url = `${baseUrl}?${params.toString()}`;
+    url = `${staffproBaseUrl}?${params.toString()}`;
   } else if (isVerifying && emailForVerification) {
     // URL for verification flow
     const params = new URLSearchParams({
@@ -57,7 +57,7 @@ function MainPage() {
     if (verificationCode) {
       params.append('code', verificationCode);
     }
-    url = `${baseUrl}?${params.toString()}`;
+    url = `${staffproBaseUrl}?${params.toString()}`;
   }
 
   // Render logic based on application state
@@ -78,7 +78,7 @@ function MainPage() {
         <CodeVerificationOverlay
           email={emailForVerification!}
           onBack={() => window.location.assign('/login')}
-          onVerify={handleCodeSubmit}
+          onVerify={handleCodeSurender}
         />
       )}
 
