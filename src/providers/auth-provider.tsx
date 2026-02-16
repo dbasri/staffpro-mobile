@@ -64,7 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
-      localStorage.removeItem(EMAIL_STORAGE_KEY);
     } catch (error) {
       console.error('Could not access local storage to clear session:', error);
     }
