@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -31,6 +32,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const isAuthenticated = !!user;
 
+  // This ref will track if the initial authentication from postMessage has happened.
+  const handshakeCompletedRef = useRef(false);
+
   // Use refs to allow the stable listener to call the latest functions
   const setUserRef = useRef(setUser);
   const toastRef = useRef(toast);
@@ -44,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
         setUser(sessionData);
+        handshakeCompletedRef.current = true;
       } catch (error) {
         console.error('Could not access local storage to save session:', error);
         toast({
@@ -59,10 +64,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
+      localStorage.removeItem(EMAIL_STORAGE_KEY);
     } catch (error) {
       console.error('Could not access local storage to clear session:', error);
     }
     setUser(null);
+    handshakeCompletedRef.current = false; // Reset on logout
     window.location.assign('/login');
   }, []);
 
@@ -92,10 +99,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('--- AUTH PROVIDER: Parsed message data:', data);
       const purpose = data.purpose ? data.purpose.trim() : '';
 
-      if (data.status === 'success' && purpose === 'Authenticated') {
+      if (
+        data.status === 'success' &&
+        purpose === 'Authenticated' &&
+        !handshakeCompletedRef.current
+      ) {
         console.log(
           '--- AUTH PROVIDER: AUTHENTICATED message received. Updating session state...'
         );
+        handshakeCompletedRef.current = true;
         try {
           setUserRef.current(data);
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
@@ -160,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           session.purpose === 'Authenticated'
         ) {
           setUser(session);
+          handshakeCompletedRef.current = true;
         }
       }
     } catch (error) {
