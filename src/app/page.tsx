@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
@@ -78,7 +79,7 @@ function MainPage() {
         <CodeVerificationOverlay
           email={emailForVerification!}
           onBack={() => window.location.assign('/login')}
-          onVerify={handleCodeSurender}
+          onVerify={handleCodeSubmit}
         />
       )}
 

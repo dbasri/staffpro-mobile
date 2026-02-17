@@ -73,29 +73,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    console.log('--- AUTH PROVIDER: ADDING STABLE GLOBAL LISTENER ---');
-
     const handleServerMessage = (event: MessageEvent) => {
       // IMPORTANT: For production, you must use a specific origin.
       // if (event.origin !== 'https://mystaffpro.com') {
-      //     console.log('--- AUTH PROVIDER: Origin MISMATCH ---', 'Expected: https://mystaffpro.com', 'Received:', event.origin);
       //     return;
       // }
-
-      console.log('--- AUTH PROVIDER: Raw message data received:', event.data);
 
       let data;
       try {
         data = JSON.parse(event.data);
       } catch (e) {
-        console.error(
-          '--- AUTH PROVIDER: FAILED TO PARSE JSON ---',
-          event.data
-        );
+        // Not all messages are JSON, so we can ignore parse errors
         return;
       }
 
-      console.log('--- AUTH PROVIDER: Parsed message data:', data);
       const purpose = data.purpose ? data.purpose.trim() : '';
 
       if (
@@ -103,9 +94,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         purpose === 'Authenticated' &&
         !handshakeCompletedRef.current
       ) {
-        console.log(
-          '--- AUTH PROVIDER: AUTHENTICATED message received. Updating session state...'
-        );
         handshakeCompletedRef.current = true;
         try {
           setUserRef.current(data);
@@ -125,15 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data.status === 'success' &&
         purpose === 'Send verify code email'
       ) {
-        console.log(
-          '--- AUTH PROVIDER: "Email sent" confirmation received. No action needed.'
-        );
         // This is expected. We just wait for the user to enter the code.
       } else if (data.status === 'fail') {
-        console.log(
-          '--- AUTH PROVIDER: FAIL message received. Alerting user...'
-        );
-
         const description =
           data.purpose || 'An unknown error occurred on the server.';
 
@@ -156,7 +137,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('message', handleServerMessage);
 
     return () => {
-      console.log('--- AUTH PROVIDER: REMOVING STABLE GLOBAL LISTENER ---');
       window.removeEventListener('message', handleServerMessage);
     };
   }, []); // Empty dependency array ensures this runs only ONCE.
