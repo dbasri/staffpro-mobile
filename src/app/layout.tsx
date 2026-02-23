@@ -7,6 +7,15 @@ import { cn } from '@/lib/utils';
 export const metadata: Metadata = {
   title: 'StaffPro Mobile',
   description: 'Secure Content Environment',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'StaffPro Mobile',
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({
