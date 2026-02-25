@@ -1,11 +1,10 @@
-
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import WebView from '@/components/web-view';
-import { Loader2 } from 'lucide-react';
+import { Loader2, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CodeVerificationOverlay from '@/components/auth/code-verification-overlay';
 import { staffproBaseUrl } from '@/lib/config';
@@ -84,13 +83,17 @@ function MainPage() {
       )}
 
       {isAuthenticated && (
-        <Button
-          onClick={logout}
-          className="absolute bottom-4 right-4 z-20 shadow-lg"
-          variant="destructive"
-        >
-          Restart
-        </Button>
+        <div className="absolute bottom-6 left-0 right-0 z-20 flex justify-center px-4 pointer-events-none">
+          <Button
+            onClick={logout}
+            variant="destructive"
+            className="pointer-events-auto flex items-center gap-2 rounded-full px-6 shadow-2xl transition-transform hover:scale-105 active:scale-95"
+            size="lg"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </Button>
+        </div>
       )}
     </main>
   );
