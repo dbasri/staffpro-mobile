@@ -45,7 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null);
     handshakeCompletedRef.current = false; // Reset on logout to allow fresh login
-    window.location.assign('/login');
+    // Redirect to the home startup screen (root)
+    window.location.href = '/';
   }, []);
 
   const logoutRef = useRef(logout);
@@ -117,10 +118,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           description: description,
         });
 
-        // If verification code failed, redirect to login
+        // If verification code failed, redirect back to start
         if (purpose.includes('Verify') || purpose.includes('Verification')) {
           setTimeout(() => {
-            window.location.assign('/login');
+            window.location.href = '/';
           }, 3000);
         }
       }
