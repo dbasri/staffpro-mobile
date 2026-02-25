@@ -78,8 +78,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     console.log('AUTH_DIAG: Message listener is ACTIVE and waiting for events...');
     
+    // Heartbeat to prove the listener is still alive in the background
+    const heartbeat = setInterval(() => {
+      console.log('AUTH_DIAG: Heartbeat - listener still active.');
+    }, 10000);
+
     const handleServerMessage = (event: MessageEvent) => {
-      // THIS LOG SHOULD TRIGGER FOR EVERY MESSAGE
+      // THIS LOG SHOULD TRIGGER FOR EVERY MESSAGE RECEIVED BY THE WINDOW
       console.log('AUTH_DIAG: Received postMessage event from origin:', event.origin);
       
       let data;
@@ -134,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       console.log('AUTH_DIAG: Message listener is being REMOVED.');
       window.removeEventListener('message', handleServerMessage);
+      clearInterval(heartbeat);
     };
   }, []);
 
