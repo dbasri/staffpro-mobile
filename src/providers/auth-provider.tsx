@@ -51,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutRef = useRef(logout);
 
+  // Sync refs with the latest state/functions on every render
   useEffect(() => {
     setUserRef.current = setUser;
     toastRef.current = toast;
@@ -77,8 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
-      // IMPORTANT: In production, validate event.origin for security.
-      
+      // Parse the incoming message data
       let data;
       try {
         data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
@@ -97,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Handle successful authentication
       if (
         status === 'success' &&
         purpose === 'Authenticated' &&
@@ -131,6 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('message', handleServerMessage);
   }, []);
 
+  // Initial session restoration
   useEffect(() => {
     try {
       const sessionString = localStorage.getItem(SESSION_STORAGE_KEY);
