@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -24,7 +23,6 @@ interface AuthContextType {
 export const AuthContext = createContext<AuthContextType | null>(null);
 
 const SESSION_STORAGE_KEY = 'staffpro-session';
-const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null);
@@ -32,15 +30,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const isAuthenticated = !!user;
 
-  // This ref will track if the initial authentication from postMessage has happened.
+  // This ref tracks if the initial authentication from postMessage has happened.
   const handshakeCompletedRef = useRef(false);
 
-  // Use refs to allow the stable listener to call the latest functions
+  // Use refs to allow the stable listener to call the latest functions without re-mounting
   const setUserRef = useRef(setUser);
   const toastRef = useRef(toast);
+  
+  const logout = useCallback(() => {
+    try {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch (error) {
+      console.error('Could not access local storage to clear session:', error);
+    }
+    setUser(null);
+    handshakeCompletedRef.current = false; // Reset on logout to allow fresh login
+    window.location.assign('/login');
+  }, []);
+
+  const logoutRef = useRef(logout);
+
   useEffect(() => {
     setUserRef.current = setUser;
     toastRef.current = toast;
+    logoutRef.current = logout;
   });
 
   const login = useCallback(
@@ -61,36 +74,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [toast]
   );
 
-  const logout = useCallback(() => {
-    try {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-    } catch (error) {
-      console.error('Could not access local storage to clear session:', error);
-    }
-    setUser(null);
-    handshakeCompletedRef.current = false; // Reset on logout
-    window.location.assign('/login');
-  }, []);
-
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
-      // IMPORTANT: For production, you must use a specific origin.
-      // if (event.origin !== 'https://mystaffpro.com') {
-      //     return;
-      // }
-
+      // IMPORTANT: In production, validate event.origin for security.
+      
       let data;
       try {
-        data = JSON.parse(event.data);
+        data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
       } catch (e) {
-        // Not all messages are JSON, so we can ignore parse errors
         return;
       }
 
-      const purpose = data.purpose ? data.purpose.trim() : '';
+      if (!data || typeof data !== 'object') return;
+
+      const status = data.status ? String(data.status).toLowerCase() : '';
+      const purpose = data.purpose ? String(data.purpose).trim() : '';
+
+      // Check for remote logoff request
+      if (status === 'logoff') {
+        logoutRef.current();
+        return;
+      }
 
       if (
-        data.status === 'success' &&
+        status === 'success' &&
         purpose === 'Authenticated' &&
         !handshakeCompletedRef.current
       ) {
@@ -99,24 +106,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUserRef.current(data);
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
         } catch (error) {
-          console.error(
-            'Could not access local storage to save session:',
-            error
-          );
-          toastRef.current({
-            variant: 'destructive',
-            title: 'Login Error',
-            description: 'Could not save session to device.',
-          });
+          console.error('Could not access local storage to save session:', error);
         }
-      } else if (
-        data.status === 'success' &&
-        purpose === 'Send verify code email'
-      ) {
-        // This is expected. We just wait for the user to enter the code.
-      } else if (data.status === 'fail') {
-        const description =
-          data.purpose || 'An unknown error occurred on the server.';
+      } else if (status === 'fail') {
+        const description = data.purpose || 'An unknown error occurred on the server.';
 
         toastRef.current({
           variant: 'destructive',
@@ -124,32 +117,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           description: description,
         });
 
-        // If verification code failed, redirect to login as codes are single-use
+        // If verification code failed, redirect to login
         if (purpose.includes('Verify') || purpose.includes('Verification')) {
-          // Use a timeout to allow the user to read the toast message before redirecting
           setTimeout(() => {
             window.location.assign('/login');
-          }, 3000); // 3-second delay
+          }, 3000);
         }
       }
     };
 
     window.addEventListener('message', handleServerMessage);
-
-    return () => {
-      window.removeEventListener('message', handleServerMessage);
-    };
-  }, []); // Empty dependency array ensures this runs only ONCE.
+    return () => window.removeEventListener('message', handleServerMessage);
+  }, []);
 
   useEffect(() => {
     try {
       const sessionString = localStorage.getItem(SESSION_STORAGE_KEY);
       if (sessionString) {
         const session = JSON.parse(sessionString);
-        if (
-          session.status === 'success' &&
-          session.purpose === 'Authenticated'
-        ) {
+        if (session.status === 'success' && session.purpose === 'Authenticated') {
           setUser(session);
           handshakeCompletedRef.current = true;
         }
