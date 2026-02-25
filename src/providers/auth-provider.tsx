@@ -41,12 +41,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } catch (error) {
-      console.error('Could not access local storage to clear session:', error);
+      // Silent fail for storage access
     }
     setUser(null);
-    handshakeCompletedRef.current = false; // Reset on logout to allow fresh login
-    // Redirect to the home startup screen (root)
-    window.location.href = '/';
+    handshakeCompletedRef.current = false;
+    
+    // Perform a hard restart to the root origin to clear all state and URL params
+    if (typeof window !== 'undefined') {
+      window.location.replace(window.location.origin);
+    }
   }, []);
 
   const logoutRef = useRef(logout);
@@ -65,7 +68,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(sessionData);
         handshakeCompletedRef.current = true;
       } catch (error) {
-        console.error('Could not access local storage to save session:', error);
         toast({
           variant: 'destructive',
           title: 'Login Error',
@@ -78,12 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
-      // Parse the incoming message data
+      // Robustly parse the incoming message data
       let data;
       try {
         data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
       } catch (e) {
-        return;
+        // Not a JSON message or already an object, handle gracefully
+        data = event.data;
       }
 
       if (!data || typeof data !== 'object') return;
@@ -108,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUserRef.current(data);
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
         } catch (error) {
-          console.error('Could not access local storage to save session:', error);
+          // Silent fail
         }
       } else if (status === 'fail') {
         const description = data.purpose || 'An unknown error occurred on the server.';
@@ -119,11 +122,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           description: description,
         });
 
-        // If verification code failed, redirect back to start
+        // If verification code failed, allow the user to try again or go back
         if (purpose.includes('Verify') || purpose.includes('Verification')) {
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 3000);
+          // No auto-redirect here to allow user to read the error
         }
       }
     };
@@ -144,7 +145,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (error) {
-      console.error('Could not access local storage or parse session:', error);
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } finally {
       setIsLoading(false);
