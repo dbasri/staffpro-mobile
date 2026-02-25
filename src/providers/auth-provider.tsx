@@ -30,33 +30,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const isAuthenticated = !!user;
 
-  // This ref tracks if the initial authentication from postMessage has happened.
   const handshakeCompletedRef = useRef(false);
-
-  // Use refs to allow the stable listener to call the latest functions without re-mounting
   const setUserRef = useRef(setUser);
   const toastRef = useRef(toast);
-  
+
   const logout = useCallback(() => {
-    console.log('AUTH: Logout function called. Clearing storage and redirecting...');
+    console.log('AUTH_DIAG: Logout initiated. Clearing state and reloading origin...');
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } catch (error) {
-      console.error('AUTH: Error removing session from localStorage:', error);
+      console.error('AUTH_DIAG: Error clearing localStorage:', error);
     }
     setUser(null);
     handshakeCompletedRef.current = false;
     
-    // Perform a hard restart to the root origin to clear all state and URL params
     if (typeof window !== 'undefined') {
-      console.log('AUTH: Hard redirecting to origin:', window.location.origin);
+      console.log('AUTH_DIAG: Hard redirect to:', window.location.origin);
       window.location.replace(window.location.origin);
     }
   }, []);
 
   const logoutRef = useRef(logout);
 
-  // Sync refs with the latest state/functions on every render
   useEffect(() => {
     setUserRef.current = setUser;
     toastRef.current = toast;
@@ -81,39 +76,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    console.log('AUTH: Initializing window.message listener...');
+    console.log('AUTH_DIAG: Message listener is ACTIVE and waiting for events...');
     
     const handleServerMessage = (event: MessageEvent) => {
-      // LOG EVERY MESSAGE for debugging
-      console.log('AUTH: postMessage event received');
-      console.log('AUTH: Event Origin:', event.origin);
-      console.log('AUTH: Raw Event Data:', event.data);
+      // THIS LOG SHOULD TRIGGER FOR EVERY MESSAGE
+      console.log('AUTH_DIAG: Received postMessage event from origin:', event.origin);
       
-      // Robustly parse the incoming message data
       let data;
       try {
         data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        console.log('AUTH: Parsed data object:', data);
+        console.log('AUTH_DIAG: Decoded message data:', data);
       } catch (e) {
-        // Not a JSON message or already an object, handle gracefully
         data = event.data;
-        console.log('AUTH: Data parsing note: Data was not valid JSON, using raw value.');
+        console.log('AUTH_DIAG: Raw (non-JSON) message data:', data);
       }
 
       if (!data || typeof data !== 'object') {
-        console.log('AUTH: Data is not a valid object, ignoring.');
+        console.log('AUTH_DIAG: Ignored message (not an object).');
         return;
       }
 
       const status = data.status ? String(data.status).toLowerCase() : '';
       const purpose = data.purpose ? String(data.purpose).trim() : '';
 
-      console.log('AUTH: Detected status in data:', status);
-      console.log('AUTH: Detected purpose in data:', purpose);
-
       // Check for remote logoff request
       if (status === 'logoff') {
-        console.log('AUTH: LOGOFF status detected! Executing logout sequence...');
+        console.log('AUTH_DIAG: "logoff" status detected! Triggering logout sequence.');
         logoutRef.current();
         return;
       }
@@ -124,47 +112,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         purpose === 'Authenticated' &&
         !handshakeCompletedRef.current
       ) {
-        console.log('AUTH: Authentication success detected. Saving session.');
+        console.log('AUTH_DIAG: Authentication success. Updating user state.');
         handshakeCompletedRef.current = true;
         try {
           setUserRef.current(data);
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
         } catch (error) {
-          console.error('AUTH: Failed to save session to localStorage:', error);
+          console.error('AUTH_DIAG: Failed to save session:', error);
         }
       } else if (status === 'fail') {
-        console.log('AUTH: Authentication failure detected.');
-        const description = data.purpose || 'An unknown error occurred on the server.';
-
+        console.log('AUTH_DIAG: Authentication failure reported by server.');
         toastRef.current({
           variant: 'destructive',
           title: 'Authentication Failed',
-          description: description,
+          description: data.purpose || 'Check server credentials.',
         });
       }
     };
 
     window.addEventListener('message', handleServerMessage);
     return () => {
-      console.log('AUTH: Removing window.message listener...');
+      console.log('AUTH_DIAG: Message listener is being REMOVED.');
       window.removeEventListener('message', handleServerMessage);
     };
   }, []);
 
-  // Initial session restoration
   useEffect(() => {
     try {
       const sessionString = localStorage.getItem(SESSION_STORAGE_KEY);
       if (sessionString) {
         const session = JSON.parse(sessionString);
         if (session.status === 'success' && session.purpose === 'Authenticated') {
-          console.log('AUTH: Restored session from localStorage for:', session.email);
+          console.log('AUTH_DIAG: Restored existing session for:', session.email);
           setUser(session);
           handshakeCompletedRef.current = true;
         }
       }
     } catch (error) {
-      console.error('AUTH: Error restoring session:', error);
+      console.error('AUTH_DIAG: Restore error:', error);
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } finally {
       setIsLoading(false);
