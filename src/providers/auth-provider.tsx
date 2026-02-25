@@ -81,19 +81,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    console.log('AUTH: Initializing window.message listener...');
+    
     const handleServerMessage = (event: MessageEvent) => {
+      // LOG EVERY MESSAGE for debugging
       console.log('AUTH: postMessage event received');
-      console.log('AUTH: Origin:', event.origin);
+      console.log('AUTH: Event Origin:', event.origin);
+      console.log('AUTH: Raw Event Data:', event.data);
       
       // Robustly parse the incoming message data
       let data;
       try {
         data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        console.log('AUTH: Parsed data:', data);
+        console.log('AUTH: Parsed data object:', data);
       } catch (e) {
         // Not a JSON message or already an object, handle gracefully
         data = event.data;
-        console.log('AUTH: Data (not JSON):', data);
+        console.log('AUTH: Data parsing note: Data was not valid JSON, using raw value.');
       }
 
       if (!data || typeof data !== 'object') {
@@ -104,12 +108,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const status = data.status ? String(data.status).toLowerCase() : '';
       const purpose = data.purpose ? String(data.purpose).trim() : '';
 
-      console.log('AUTH: Detected status:', status);
-      console.log('AUTH: Detected purpose:', purpose);
+      console.log('AUTH: Detected status in data:', status);
+      console.log('AUTH: Detected purpose in data:', purpose);
 
       // Check for remote logoff request
       if (status === 'logoff') {
-        console.log('AUTH: Logoff status detected. Triggering logout...');
+        console.log('AUTH: LOGOFF status detected! Executing logout sequence...');
         logoutRef.current();
         return;
       }
@@ -120,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         purpose === 'Authenticated' &&
         !handshakeCompletedRef.current
       ) {
-        console.log('AUTH: Authentication success detected.');
+        console.log('AUTH: Authentication success detected. Saving session.');
         handshakeCompletedRef.current = true;
         try {
           setUserRef.current(data);
@@ -137,16 +141,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           title: 'Authentication Failed',
           description: description,
         });
-
-        // If verification code failed, allow the user to try again or go back
-        if (purpose.includes('Verify') || purpose.includes('Verification')) {
-          // No auto-redirect here to allow user to read the error
-        }
       }
     };
 
     window.addEventListener('message', handleServerMessage);
-    return () => window.removeEventListener('message', handleServerMessage);
+    return () => {
+      console.log('AUTH: Removing window.message listener...');
+      window.removeEventListener('message', handleServerMessage);
+    };
   }, []);
 
   // Initial session restoration
@@ -156,11 +158,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (sessionString) {
         const session = JSON.parse(sessionString);
         if (session.status === 'success' && session.purpose === 'Authenticated') {
+          console.log('AUTH: Restored session from localStorage for:', session.email);
           setUser(session);
           handshakeCompletedRef.current = true;
         }
       }
     } catch (error) {
+      console.error('AUTH: Error restoring session:', error);
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } finally {
       setIsLoading(false);
