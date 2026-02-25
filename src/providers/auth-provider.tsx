@@ -32,11 +32,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handshakeCompletedRef = useRef(false);
   const setUserRef = useRef(setUser);
-  const toastRef = useRef(toast);
+  const logoutRef = useRef<() => void>(() => {});
 
   // Robust logout that clears everything and forces a reload to the startup screen
   const logout = useCallback(() => {
-    console.log('AUTH: Logout initiated.');
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } catch (error) {
@@ -46,19 +45,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     handshakeCompletedRef.current = false;
     
     if (typeof window !== 'undefined') {
-      // Use replace to prevent "Back" button from returning to authenticated state
+      // Use replace to ensure a hard restart at the root origin
       window.location.replace(window.location.origin);
     }
   }, []);
 
-  const logoutRef = useRef(logout);
-
-  // Keep refs in sync for the event listener closure
+  // Update the ref so the event listener closure always sees the latest logout function
   useEffect(() => {
-    setUserRef.current = setUser;
-    toastRef.current = toast;
     logoutRef.current = logout;
-  });
+  }, [logout]);
 
   const login = useCallback(
     (sessionData: UserSession) => {
@@ -94,7 +89,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Detection for server-initiated logoff
       if (status === 'logoff') {
-        console.log('AUTH: Logoff message detected from server.');
         logoutRef.current();
         return;
       }
@@ -105,7 +99,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         purpose === 'Authenticated' &&
         !handshakeCompletedRef.current
       ) {
-        console.log('AUTH: Authentication successful.');
         handshakeCompletedRef.current = true;
         try {
           setUserRef.current(data);
@@ -113,12 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (error) {
           console.error('AUTH: Failed to persist session.');
         }
-      } else if (status === 'fail') {
-        toastRef.current({
-          variant: 'destructive',
-          title: 'Authentication Failed',
-          description: data.purpose || 'Please check your credentials.',
-        });
       }
     };
 

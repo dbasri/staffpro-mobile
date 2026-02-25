@@ -21,16 +21,29 @@ function MainPage() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   const searchParams = useSearchParams();
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
+  // Handle the logoff flow
+  useEffect(() => {
+    if (isLoggingOut) {
+      // Give the iframe 2 seconds to reach the server logoff endpoint
+      // before clearing the local PWA session and restarting.
+      const timer = setTimeout(() => {
+        logout();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoggingOut, logout]);
+
   // Redirect to login if not authenticated or verifying
   useEffect(() => {
-    if (!isAuthLoading && !isAuthenticated && !isVerifying) {
+    if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut) {
       window.location.assign('/login');
     }
-  }, [isAuthLoading, isAuthenticated, isVerifying]);
+  }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut]);
 
   // Handle code submission by updating state
   const handleCodeSubmit = (code: string) => {
@@ -39,7 +52,11 @@ function MainPage() {
   
   // Determine the URL based on the current state
   let url: string | null = null;
-  if (isAuthenticated && user) {
+  
+  if (isLoggingOut) {
+    // Explicitly notify server of logoff
+    url = `${staffproBaseUrl}?logoff=true`;
+  } else if (isAuthenticated && user) {
     // Final authenticated URL
     const params = new URLSearchParams({
       session: user.session,
@@ -66,7 +83,6 @@ function MainPage() {
   }
 
   if (url === null) {
-      // This can happen briefly before the redirect effect kicks in
       return <GlobalLoader />;
   }
   
@@ -82,10 +98,10 @@ function MainPage() {
         />
       )}
 
-      {isAuthenticated && (
+      {isAuthenticated && !isLoggingOut && (
         <div className="absolute bottom-6 left-0 right-0 z-20 flex justify-center px-4 pointer-events-none">
           <Button
-            onClick={logout}
+            onClick={() => setIsLoggingOut(true)}
             variant="destructive"
             className="pointer-events-auto flex items-center gap-2 rounded-full px-6 shadow-2xl transition-transform hover:scale-105 active:scale-95"
             size="lg"
