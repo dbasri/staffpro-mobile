@@ -73,7 +73,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       let data = event.data;
       
-      // Handle cases where the data might be a JSON string with trailing garbage/origin
       if (typeof data === 'string') {
         try {
           const start = data.indexOf('{');
@@ -100,14 +99,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       console.log('DEBUG: ANALYZING MESSAGE:', { status, purpose });
 
-      // Handle explicit logoff request
       if (status === 'logoff') {
         console.log('DEBUG: INITIATING LOGOFF PER SERVER REQUEST');
         logoutRef.current();
         return;
       }
 
-      // Handle failure messages for code verification
       if (status === 'fail') {
         if (purpose.includes('verify') || purpose.includes('code')) {
           console.log('DEBUG: SETTING INVALID CODE ERROR');
@@ -116,9 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Handle successful authentication
       if (status === 'success') {
-        // Distinguish between actual login and just sending the email
         const isEmailSentOnly = purpose.includes('email') && (purpose.includes('send') || purpose.includes('sent'));
         const isActuallyAuthenticated = 
           purpose === 'authenticated' || 
