@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       let data = event.data;
       
-      // Handle cases where the data might be a JSON string with trailing garbage
+      // Handle cases where the data might be a JSON string with trailing garbage/origin
       if (typeof data === 'string') {
         try {
           const start = data.indexOf('{');
@@ -83,7 +83,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             data = JSON.parse(jsonPart);
             console.log('DEBUG: PARSED JSON PAYLOAD:', data);
           } else {
-            console.log('DEBUG: MESSAGE STRING DID NOT CONTAIN VALID JSON BRACKETS');
             return;
           }
         } catch (e) {
@@ -101,12 +100,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       console.log('DEBUG: ANALYZING MESSAGE:', { status, purpose });
 
+      // Handle explicit logoff request
       if (status === 'logoff') {
         console.log('DEBUG: INITIATING LOGOFF PER SERVER REQUEST');
         logoutRef.current();
         return;
       }
 
+      // Handle failure messages for code verification
       if (status === 'fail') {
         if (purpose.includes('verify') || purpose.includes('code')) {
           console.log('DEBUG: SETTING INVALID CODE ERROR');
@@ -115,12 +116,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Handle successful authentication
       if (status === 'success') {
-        // Only trigger login if the purpose is related to actual verification success,
-        // not just sending the email.
+        // Distinguish between actual login and just sending the email
+        const isEmailSentOnly = purpose.includes('email') && (purpose.includes('send') || purpose.includes('sent'));
         const isActuallyAuthenticated = 
           purpose === 'authenticated' || 
-          (purpose.includes('verify') && !purpose.includes('email') && !purpose.includes('send'));
+          (purpose.includes('verify') && !isEmailSentOnly);
 
         if (isActuallyAuthenticated) {
           console.log('DEBUG: AUTHENTICATION SUCCESSFUL, LOGGING IN');
