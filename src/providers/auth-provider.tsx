@@ -31,8 +31,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const isAuthenticated = !!user;
 
-  const handshakeCompletedRef = useRef(false);
-  
   const login = useCallback((sessionData: UserSession) => {
     setUser(sessionData);
     setAuthError(null);
@@ -41,7 +39,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('AUTH: Failed to persist session.');
     }
-    handshakeCompletedRef.current = true;
   }, []);
 
   const logout = useCallback(() => {
@@ -52,7 +49,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null);
     setAuthError(null);
-    handshakeCompletedRef.current = false;
     
     if (typeof window !== 'undefined') {
       window.location.replace(window.location.origin);
@@ -69,8 +65,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
+      console.log('DEBUG: RAW MESSAGE RECEIVED AT WINDOW:', {
+        origin: event.origin,
+        data: event.data,
+        dataType: typeof event.data
+      });
+
       let data = event.data;
       
+      // Handle cases where the data might be a JSON string with trailing garbage
       if (typeof data === 'string') {
         try {
           const start = data.indexOf('{');
@@ -78,10 +81,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (start !== -1 && end !== -1) {
             const jsonPart = data.substring(start, end + 1);
             data = JSON.parse(jsonPart);
+            console.log('DEBUG: PARSED JSON PAYLOAD:', data);
           } else {
+            console.log('DEBUG: MESSAGE STRING DID NOT CONTAIN VALID JSON BRACKETS');
             return;
           }
         } catch (e) {
+          console.log('DEBUG: JSON PARSE ERROR:', e);
           return;
         }
       }
@@ -93,19 +99,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const status = data.status ? String(data.status).toLowerCase() : '';
       const purpose = data.purpose ? String(data.purpose).toLowerCase() : '';
 
+      console.log('DEBUG: ANALYZING MESSAGE:', { status, purpose });
+
       if (status === 'logoff') {
+        console.log('DEBUG: INITIATING LOGOFF PER SERVER REQUEST');
         logoutRef.current();
         return;
       }
 
-      if (status === 'fail' && (purpose.includes('verify') || purpose.includes('code'))) {
-        setAuthError('invalid-code');
+      if (status === 'fail') {
+        if (purpose.includes('verify') || purpose.includes('code')) {
+          console.log('DEBUG: SETTING INVALID CODE ERROR');
+          setAuthError('invalid-code');
+        }
         return;
       }
 
       if (status === 'success') {
-        if (purpose === 'authenticated' || (purpose.includes('verify') && !purpose.includes('email'))) {
+        // Only trigger login if the purpose is related to actual verification success,
+        // not just sending the email.
+        const isActuallyAuthenticated = 
+          purpose === 'authenticated' || 
+          (purpose.includes('verify') && !purpose.includes('email') && !purpose.includes('send'));
+
+        if (isActuallyAuthenticated) {
+          console.log('DEBUG: AUTHENTICATION SUCCESSFUL, LOGGING IN');
           loginRef.current(data);
+        } else {
+          console.log('DEBUG: SUCCESS MESSAGE RECEIVED BUT NOT FOR AUTHENTICATION');
         }
       }
     };
@@ -123,7 +144,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const session = JSON.parse(sessionString);
         if (session.status === 'success' && (session.purpose === 'Authenticated' || session.purpose === 'authenticated')) {
           setUser(session);
-          handshakeCompletedRef.current = true;
         }
       }
     } catch (error) {
