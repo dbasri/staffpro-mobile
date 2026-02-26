@@ -88,7 +88,7 @@ function MainPage() {
   
   return (
     <main className="relative h-screen">
-      <WebView key="staffpro-webview" url={url} />
+      <WebView key={`staffpro-webview-${isVerifying ? 'verify' : 'main'}`} url={url} />
       
       {isVerifying && !isAuthenticated && (
         <CodeVerificationOverlay
