@@ -34,7 +34,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handshakeCompletedRef = useRef(false);
   
   const login = useCallback((sessionData: UserSession) => {
-    console.log("AUTH: Logging in user", sessionData);
     setUser(sessionData);
     setAuthError(null);
     try {
@@ -46,7 +45,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    console.log("AUTH: Logging out");
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } catch (error) {
@@ -73,8 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
       
-      console.log("AUTH_DIAG: RAW MESSAGE RECEIVED", { origin: event.origin, data });
-
       if (typeof data === 'string') {
         try {
           const start = data.indexOf('{');
@@ -82,26 +78,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (start !== -1 && end !== -1) {
             const jsonPart = data.substring(start, end + 1);
             data = JSON.parse(jsonPart);
-            console.log("AUTH_DIAG: PARSED JSON PAYLOAD", data);
           } else {
-            console.log("AUTH_DIAG: Message is string but no JSON found.");
             return;
           }
         } catch (e) {
-          console.error("AUTH_DIAG: JSON PARSE ERROR", e);
           return;
         }
       }
 
       if (!data || typeof data !== 'object') {
-        console.log("AUTH_DIAG: Data is not an object, skipping.");
         return;
       }
 
       const status = data.status ? String(data.status).toLowerCase() : '';
       const purpose = data.purpose ? String(data.purpose).toLowerCase() : '';
-
-      console.log("AUTH_DIAG: Processing message", { status, purpose });
 
       if (status === 'logoff') {
         logoutRef.current();
@@ -109,17 +99,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (status === 'fail' && (purpose.includes('verify') || purpose.includes('code'))) {
-        console.log("AUTH_DIAG: FAIL DETECTED, setting invalid-code error");
         setAuthError('invalid-code');
         return;
       }
 
       if (status === 'success') {
         if (purpose === 'authenticated' || (purpose.includes('verify') && !purpose.includes('email'))) {
-          console.log("AUTH_DIAG: SUCCESS AUTH DETECTED, triggering login");
           loginRef.current(data);
-        } else {
-          console.log("AUTH_DIAG: SUCCESS but non-auth purpose detected, skipping login", purpose);
         }
       }
     };
