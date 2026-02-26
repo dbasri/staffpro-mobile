@@ -70,27 +70,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
-      console.log("AUTH: RAW MESSAGE RECEIVED", { origin: event.origin, data });
+      console.log("AUTH_DIAG: RAW MESSAGE RECEIVED", { origin: event.origin, data });
 
-      // Robust parsing for string data that might have trailing garbage (like the origin URL)
       if (typeof data === 'string') {
         try {
-          // If direct parse fails, try extracting the first valid JSON object
-          // This handles the format: {"status":"fail",...},"https://origin.com"
           const start = data.indexOf('{');
           const end = data.lastIndexOf('}');
           if (start !== -1 && end !== -1) {
-            try {
-              data = JSON.parse(data.substring(start, end + 1));
-              console.log("AUTH: PARSED JSON PAYLOAD", data);
-            } catch (innerError) {
-              console.error("AUTH: FAILED TO EXTRACT JSON", innerError);
-              return; 
-            }
+            const jsonPart = data.substring(start, end + 1);
+            data = JSON.parse(jsonPart);
+            console.log("AUTH_DIAG: PARSED JSON PAYLOAD", data);
           } else {
             return;
           }
         } catch (e) {
+          console.error("AUTH_DIAG: JSON PARSE ERROR", e);
           return;
         }
       }
@@ -100,32 +94,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const status = data.status ? String(data.status).toLowerCase() : '';
       const purpose = data.purpose ? String(data.purpose).toLowerCase() : '';
 
-      // LOGOFF detection
       if (status === 'logoff') {
         logoutRef.current();
         return;
       }
 
-      // FAIL detection - specifically for verification code
-      if (status === 'fail' && (purpose.includes('verify one-time code') || purpose.includes('verify'))) {
-        console.log("AUTH: SETTING ERROR STATE TO 'invalid-code'");
+      if (status === 'fail' && (purpose.includes('verify') || purpose.includes('code'))) {
+        console.log("AUTH_DIAG: FAIL DETECTED, setting invalid-code error");
         setAuthError('invalid-code');
         return;
       }
 
-      // SUCCESS detection
       if (
         status === 'success' &&
-        (purpose === 'authenticated' || purpose.includes('verify one-time code')) &&
+        (purpose === 'authenticated' || purpose.includes('verify')) &&
         !handshakeCompletedRef.current
       ) {
-        handshakeCompletedRef.current = true;
         loginRef.current(data);
       }
     };
 
     window.addEventListener('message', handleServerMessage);
-    console.log("AUTH: LISTENER REGISTERED");
     return () => window.removeEventListener('message', handleServerMessage);
   }, []);
 
