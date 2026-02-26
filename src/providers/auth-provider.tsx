@@ -30,8 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handshakeCompletedRef = useRef(false);
   const setUserRef = useRef(setUser);
-  const logoutRef = useRef<() => void>(() => {});
-
+  
   const login = useCallback((sessionData: UserSession) => {
     setUser(sessionData);
     try {
@@ -55,6 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.location.replace(window.location.origin);
     }
   }, []);
+
+  const logoutRef = useRef(logout);
 
   useEffect(() => {
     logoutRef.current = logout;

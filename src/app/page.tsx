@@ -47,8 +47,13 @@ function MainPage() {
   
   let url: string | null = null;
   
-  if (isLoggingOut) {
-    url = `${staffproBaseUrl}?logoff=true`;
+  if (isLoggingOut && user) {
+    const params = new URLSearchParams({
+      logoff: 'true',
+      email: user.email,
+      session: user.session,
+    });
+    url = `${staffproBaseUrl}?${params.toString()}`;
   } else if (isAuthenticated && user) {
     const params = new URLSearchParams({
       session: user.session,
@@ -92,8 +97,8 @@ function MainPage() {
         <div className="absolute bottom-6 left-0 right-0 z-20 flex justify-center px-4 pointer-events-none">
           <Button
             onClick={() => setIsLoggingOut(true)}
-            variant="destructive"
-            className="pointer-events-auto flex items-center gap-2 rounded-full px-8 shadow-2xl transition-transform hover:scale-105 active:scale-95 font-semibold"
+            style={{ backgroundColor: '#35ade9' }}
+            className="pointer-events-auto flex items-center gap-2 rounded-full px-8 shadow-2xl transition-transform hover:scale-105 active:scale-95 font-semibold text-white"
             size="lg"
           >
             <LogOut className="h-4 w-4" />
