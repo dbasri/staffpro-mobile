@@ -1,8 +1,16 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/providers/auth-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
+
+export const viewport: Viewport = {
+  themeColor: '#F5A623',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5, // Allow zooming
+  userScalable: true,
+};
 
 export const metadata: Metadata = {
   title: 'StaffPro Mobile',
@@ -31,7 +39,6 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="theme-color" content="#F5A623" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
@@ -43,7 +50,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className={cn('font-body antialiased', 'bg-background text-foreground')}>
+      <body className={cn('font-body antialiased', 'bg-background text-foreground overflow-hidden')}>
         <AuthProvider>
           {children}
           <Toaster />

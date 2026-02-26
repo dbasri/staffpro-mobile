@@ -15,7 +15,7 @@ function WebView({ url }: WebViewProps) {
   };
 
   return (
-    <div className="relative h-screen w-full bg-background">
+    <div className="relative h-dvh w-full bg-background overflow-hidden">
       {isLoading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -26,6 +26,7 @@ function WebView({ url }: WebViewProps) {
         onLoad={handleLoad}
         title="Web Content"
         className="absolute inset-0 h-full w-full border-0"
+        allow="camera; microphone; geolocation"
       />
     </div>
   );

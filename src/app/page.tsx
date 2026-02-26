@@ -11,7 +11,7 @@ import { staffproBaseUrl } from '@/lib/config';
 
 function GlobalLoader() {
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-background">
+    <div className="flex h-dvh w-full items-center justify-center bg-background">
       <Loader2 className="h-12 w-12 animate-spin text-primary" />
     </div>
   );
@@ -87,7 +87,7 @@ function MainPage() {
   }
   
   return (
-    <main className="relative h-screen">
+    <main className="relative h-dvh w-full overflow-hidden">
       <WebView key={`staffpro-webview-${isVerifying ? 'verify' : 'main'}`} url={url} />
       
       {isVerifying && !isAuthenticated && (
