@@ -14,9 +14,11 @@ interface AuthContextType {
   user: UserSession | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  authError: string | null;
   login: (sessionData: UserSession) => void;
   passkeyLogin: () => Promise<void>;
   logout: () => void;
+  setAuthError: (error: string | null) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -26,13 +28,14 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const isAuthenticated = !!user;
 
   const handshakeCompletedRef = useRef(false);
-  const setUserRef = useRef(setUser);
   
   const login = useCallback((sessionData: UserSession) => {
     setUser(sessionData);
+    setAuthError(null);
     try {
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
     } catch (error) {
@@ -48,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('AUTH: Error clearing storage:', error);
     }
     setUser(null);
+    setAuthError(null);
     handshakeCompletedRef.current = false;
     
     if (typeof window !== 'undefined') {
@@ -56,10 +60,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logoutRef = useRef(logout);
+  const loginRef = useRef(login);
 
   useEffect(() => {
     logoutRef.current = logout;
-  }, [logout]);
+    loginRef.current = login;
+  }, [logout, login]);
 
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
@@ -80,18 +86,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (status === 'fail' && purpose === 'Verify one-time code') {
+        setAuthError('invalid-code');
+        return;
+      }
+
       if (
         status === 'success' &&
         purpose === 'Authenticated' &&
         !handshakeCompletedRef.current
       ) {
         handshakeCompletedRef.current = true;
-        try {
-          setUserRef.current(data);
-          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
-        } catch (error) {
-          console.error('AUTH: Failed to persist session.');
-        }
+        loginRef.current(data);
       }
     };
 
@@ -129,7 +135,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isAuthenticated, isLoading, login, passkeyLogin, logout }}
+      value={{ 
+        user, 
+        isAuthenticated, 
+        isLoading, 
+        authError,
+        login, 
+        passkeyLogin, 
+        logout,
+        setAuthError
+      }}
     >
       {children}
     </AuthContext.Provider>

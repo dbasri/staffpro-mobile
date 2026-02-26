@@ -18,7 +18,7 @@ function GlobalLoader() {
 }
 
 function MainPage() {
-  const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading, logout, authError, setAuthError } = useAuth();
   const searchParams = useSearchParams();
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -43,6 +43,11 @@ function MainPage() {
 
   const handleCodeSubmit = (code: string) => {
     setVerificationCode(code);
+  };
+  
+  const handleBackToLogin = () => {
+    setAuthError(null);
+    window.location.assign('/login');
   };
   
   let url: string | null = null;
@@ -88,7 +93,8 @@ function MainPage() {
       {isVerifying && !isAuthenticated && (
         <CodeVerificationOverlay
           email={emailForVerification!}
-          onBack={() => window.location.assign('/login')}
+          isInvalid={authError === 'invalid-code'}
+          onBack={handleBackToLogin}
           onVerify={handleCodeSubmit}
         />
       )}

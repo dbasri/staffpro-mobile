@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -21,8 +20,8 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { MailCheck, ShieldCheck } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { MailCheck, ShieldCheck, AlertCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const CodeVerificationSchema = z.object({
   code: z.string().min(1, { message: 'Please enter the code.' }),
@@ -32,15 +31,15 @@ type CodeVerificationFormValues = z.infer<typeof CodeVerificationSchema>;
 
 export default function CodeVerificationOverlay({
   email,
+  isInvalid,
   onBack,
   onVerify,
 }: {
   email: string;
+  isInvalid?: boolean;
   onBack: () => void;
   onVerify: (code: string) => void;
 }) {
-  const router = useRouter();
-
   const form = useForm<CodeVerificationFormValues>({
     resolver: zodResolver(CodeVerificationSchema),
     defaultValues: { code: '' },
@@ -54,13 +53,28 @@ export default function CodeVerificationOverlay({
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <MailCheck className="h-8 w-8 text-primary" />
+          <div className={cn(
+            "mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full",
+            isInvalid ? "bg-destructive/10" : "bg-primary/10"
+          )}>
+            {isInvalid ? (
+              <AlertCircle className="h-8 w-8 text-destructive" />
+            ) : (
+              <MailCheck className="h-8 w-8 text-primary" />
+            )}
           </div>
-          <CardTitle className="text-2xl">Check your inbox</CardTitle>
+          <CardTitle className={cn("text-2xl", isInvalid && "text-destructive")}>
+            {isInvalid ? "Code invalid" : "Check your inbox"}
+          </CardTitle>
           <CardDescription>
-            A verification code has been sent to{' '}
-            <span className="font-semibold text-foreground">{email}</span>.
+            {isInvalid ? (
+              "Click Back to Login to receive a new code."
+            ) : (
+              <>
+                A verification code has been sent to{' '}
+                <span className="font-semibold text-foreground">{email}</span>.
+              </>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -81,7 +95,10 @@ export default function CodeVerificationOverlay({
                         <Input
                           placeholder="XXXXXX"
                           {...field}
-                          className="pl-10 text-center tracking-[0.5em]"
+                          className={cn(
+                            "pl-10 text-center tracking-[0.5em]",
+                            isInvalid && "border-destructive focus-visible:ring-destructive"
+                          )}
                         />
                       </div>
                     </FormControl>
@@ -90,7 +107,7 @@ export default function CodeVerificationOverlay({
                 )}
               />
               <div className="space-y-2 pt-2">
-                <Button type="submit" className="w-full">
+                <Button type="submit" className="w-full" disabled={isInvalid}>
                   Verify Code
                 </Button>
                 <Button onClick={onBack} variant="outline" className="w-full" type="button">
