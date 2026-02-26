@@ -61,7 +61,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Use refs to ensure the event listener always has the latest functions
   const logoutRef = useRef(logout);
   const loginRef = useRef(login);
 
@@ -74,12 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
       
-      // DIAGNOSTIC 1: LOG EVERYTHING RECEIVED
       console.log("AUTH_DIAG: RAW MESSAGE RECEIVED", { origin: event.origin, data });
 
       if (typeof data === 'string') {
         try {
-          // Attempt to find JSON block in case of trailing noise/origin data
           const start = data.indexOf('{');
           const end = data.lastIndexOf('}');
           if (start !== -1 && end !== -1) {
@@ -106,36 +103,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       console.log("AUTH_DIAG: Processing message", { status, purpose });
 
-      // Handle explicit logoff
       if (status === 'logoff') {
         logoutRef.current();
         return;
       }
 
-      // Handle explicit authentication failure
       if (status === 'fail' && (purpose.includes('verify') || purpose.includes('code'))) {
         console.log("AUTH_DIAG: FAIL DETECTED, setting invalid-code error");
         setAuthError('invalid-code');
         return;
       }
 
-      // Handle success
-      if (
-        status === 'success' &&
-        (purpose === 'authenticated' || purpose.includes('verify')) &&
-        !handshakeCompletedRef.current
-      ) {
-        console.log("AUTH_DIAG: SUCCESS DETECTED, triggering login");
-        loginRef.current(data);
+      if (status === 'success') {
+        if (purpose === 'authenticated' || (purpose.includes('verify') && !purpose.includes('email'))) {
+          console.log("AUTH_DIAG: SUCCESS AUTH DETECTED, triggering login");
+          loginRef.current(data);
+        } else {
+          console.log("AUTH_DIAG: SUCCESS but non-auth purpose detected, skipping login", purpose);
+        }
       }
     };
 
     window.addEventListener('message', handleServerMessage);
-    console.log("AUTH: Message listener attached to window.");
-    
     return () => {
       window.removeEventListener('message', handleServerMessage);
-      console.log("AUTH: Message listener removed from window.");
     };
   }, []);
 
