@@ -69,31 +69,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
-      let data;
-      try {
-        data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-      } catch (e) {
-        data = event.data;
+      let data = event.data;
+
+      // Robust parsing for string data that might have trailing garbage
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data);
+        } catch (e) {
+          // If direct parse fails, try extracting the first valid JSON object
+          const start = data.indexOf('{');
+          const end = data.lastIndexOf('}');
+          if (start !== -1 && end !== -1) {
+            try {
+              data = JSON.parse(data.substring(start, end + 1));
+            } catch (innerError) {
+              return; 
+            }
+          } else {
+            return;
+          }
+        }
       }
 
       if (!data || typeof data !== 'object') return;
 
       const status = data.status ? String(data.status).toLowerCase() : '';
-      const purpose = data.purpose ? String(data.purpose).trim() : '';
+      const purpose = data.purpose ? String(data.purpose).toLowerCase() : '';
 
+      // LOGOFF detection
       if (status === 'logoff') {
         logoutRef.current();
         return;
       }
 
-      if (status === 'fail' && purpose === 'Verify one-time code') {
+      // FAIL detection - specifically for verification code
+      if (status === 'fail' && purpose.includes('verify one-time code')) {
         setAuthError('invalid-code');
         return;
       }
 
+      // SUCCESS detection
       if (
         status === 'success' &&
-        purpose === 'Authenticated' &&
+        (purpose === 'authenticated' || purpose.includes('verify one-time code')) &&
         !handshakeCompletedRef.current
       ) {
         handshakeCompletedRef.current = true;
