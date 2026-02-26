@@ -31,7 +31,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const isAuthenticated = !!user;
 
-  // Track state in refs for use inside the event listener to avoid stale closures
   const authErrorRef = useRef<string | null>(null);
   
   const login = useCallback((sessionData: UserSession) => {
@@ -72,24 +71,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('DEBUG: APP INITIALIZED. ORIGIN:', window.location.origin);
 
     const handleServerMessage = (event: MessageEvent) => {
-      // LOG EVERY MESSAGE RECEIVED
       console.log('DEBUG: RAW MESSAGE RECEIVED AT WINDOW:', {
         origin: event.origin,
-        data: event.data,
-        dataType: typeof event.data
+        data: event.data
       });
 
       let data = event.data;
       
-      // Robust JSON extraction
       if (typeof data === 'string') {
         try {
           const jsonMatch = data.match(/\{.*\}/);
           if (jsonMatch) {
             data = JSON.parse(jsonMatch[0]);
-            console.log('DEBUG: EXTRACTED JSON PAYLOAD:', data);
+            console.log('DEBUG: PARSED JSON PAYLOAD:', data);
           } else {
-            console.log('DEBUG: MESSAGE IS STRING BUT NO JSON DETECTED');
             return;
           }
         } catch (e) {
@@ -98,42 +93,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      if (!data || typeof data !== 'object') {
-        return;
-      }
+      if (!data || typeof data !== 'object') return;
 
       const status = data.status ? String(data.status).toLowerCase() : '';
       const purpose = data.purpose ? String(data.purpose).toLowerCase() : '';
 
       console.log('DEBUG: ANALYZING MESSAGE:', { status, purpose });
 
-      if (status === 'logoff') {
-        console.log('DEBUG: INITIATING LOGOFF PER SERVER REQUEST');
+      // Handle Logoff
+      if (status === 'logoff' || purpose === 'logoff') {
         logoutRef.current();
         return;
       }
 
-      if (status === 'fail') {
-        console.log('DEBUG: FAILURE STATUS DETECTED');
-        if (purpose.includes('verify') || purpose.includes('code')) {
-          console.log('DEBUG: SETTING INVALID CODE ERROR');
-          setAuthError('invalid-code');
-          authErrorRef.current = 'invalid-code';
-        }
+      // Handle Failures (both explicit 'fail' and 'success' with error purpose)
+      const isFailure = status === 'fail' || purpose.includes('invalid') || purpose.includes('error');
+      
+      if (isFailure) {
+        console.log('DEBUG: FAILURE DETECTED');
+        setAuthError('invalid-code');
+        authErrorRef.current = 'invalid-code';
         return;
       }
 
+      // Handle Success
       if (status === 'success') {
         const isEmailSentOnly = purpose.includes('email') && (purpose.includes('send') || purpose.includes('sent'));
         const isActuallyAuthenticated = 
           purpose === 'authenticated' || 
-          (purpose.includes('verify') && !isEmailSentOnly);
+          (purpose.includes('verify') && !isEmailSentOnly && !purpose.includes('invalid'));
 
         if (isActuallyAuthenticated) {
           console.log('DEBUG: AUTHENTICATION SUCCESSFUL, LOGGING IN');
           loginRef.current(data);
-        } else {
-          console.log('DEBUG: SUCCESS MESSAGE RECEIVED BUT NOT FOR AUTHENTICATION (PROBABLY EMAIL SENT)');
+        } else if (isEmailSentOnly) {
+          console.log('DEBUG: EMAIL SENT SUCCESS MESSAGE');
+          setAuthError(null);
         }
       }
     };
