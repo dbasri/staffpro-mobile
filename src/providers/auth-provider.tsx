@@ -31,9 +31,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const isAuthenticated = !!user;
 
+  // Track state in refs for use inside the event listener to avoid stale closures
+  const authErrorRef = useRef<string | null>(null);
+  
   const login = useCallback((sessionData: UserSession) => {
     setUser(sessionData);
     setAuthError(null);
+    authErrorRef.current = null;
     try {
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
     } catch (error) {
@@ -49,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null);
     setAuthError(null);
+    authErrorRef.current = null;
     
     if (typeof window !== 'undefined') {
       window.location.replace(window.location.origin);
@@ -64,7 +69,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [logout, login]);
 
   useEffect(() => {
+    console.log('DEBUG: APP INITIALIZED. ORIGIN:', window.location.origin);
+
     const handleServerMessage = (event: MessageEvent) => {
+      // LOG EVERY MESSAGE RECEIVED
       console.log('DEBUG: RAW MESSAGE RECEIVED AT WINDOW:', {
         origin: event.origin,
         data: event.data,
@@ -73,15 +81,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       let data = event.data;
       
+      // Robust JSON extraction
       if (typeof data === 'string') {
         try {
-          const start = data.indexOf('{');
-          const end = data.lastIndexOf('}');
-          if (start !== -1 && end !== -1) {
-            const jsonPart = data.substring(start, end + 1);
-            data = JSON.parse(jsonPart);
-            console.log('DEBUG: PARSED JSON PAYLOAD:', data);
+          const jsonMatch = data.match(/\{.*\}/);
+          if (jsonMatch) {
+            data = JSON.parse(jsonMatch[0]);
+            console.log('DEBUG: EXTRACTED JSON PAYLOAD:', data);
           } else {
+            console.log('DEBUG: MESSAGE IS STRING BUT NO JSON DETECTED');
             return;
           }
         } catch (e) {
@@ -106,9 +114,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (status === 'fail') {
+        console.log('DEBUG: FAILURE STATUS DETECTED');
         if (purpose.includes('verify') || purpose.includes('code')) {
           console.log('DEBUG: SETTING INVALID CODE ERROR');
           setAuthError('invalid-code');
+          authErrorRef.current = 'invalid-code';
         }
         return;
       }
@@ -123,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('DEBUG: AUTHENTICATION SUCCESSFUL, LOGGING IN');
           loginRef.current(data);
         } else {
-          console.log('DEBUG: SUCCESS MESSAGE RECEIVED BUT NOT FOR AUTHENTICATION');
+          console.log('DEBUG: SUCCESS MESSAGE RECEIVED BUT NOT FOR AUTHENTICATION (PROBABLY EMAIL SENT)');
         }
       }
     };
