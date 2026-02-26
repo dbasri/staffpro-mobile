@@ -71,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('DEBUG: APP INITIALIZED. ORIGIN:', window.location.origin);
 
     const handleServerMessage = (event: MessageEvent) => {
+      // Log every message to see what actually arrives
       console.log('DEBUG: RAW MESSAGE RECEIVED AT WINDOW:', {
         origin: event.origin,
         data: event.data
@@ -78,8 +79,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       let data = event.data;
       
+      // Handle string payloads (common in iframe postMessage)
       if (typeof data === 'string') {
         try {
+          // Extract JSON if it's wrapped in other text (e.g. origins)
           const jsonMatch = data.match(/\{.*\}/);
           if (jsonMatch) {
             data = JSON.parse(jsonMatch[0]);
@@ -100,35 +103,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       console.log('DEBUG: ANALYZING MESSAGE:', { status, purpose });
 
-      // Handle Logoff
+      // 1. Handle explicit Logoff
       if (status === 'logoff' || purpose === 'logoff') {
+        console.log('DEBUG: LOGOFF RECEIVED');
         logoutRef.current();
         return;
       }
 
-      // Handle Failures (both explicit 'fail' and 'success' with error purpose)
-      const isFailure = status === 'fail' || purpose.includes('invalid') || purpose.includes('error');
+      // 2. Handle Failures (Including workaround where status is 'success' but purpose is 'invalid')
+      const isExplicitFail = status === 'fail' || status === 'unsuccessful' || status === 'error';
+      const isInvalidPurpose = purpose.includes('invalid') || purpose.includes('error') || purpose.includes('incorrect');
       
-      if (isFailure) {
-        console.log('DEBUG: FAILURE DETECTED');
+      if (isExplicitFail || isInvalidPurpose) {
+        console.log('DEBUG: FAILURE DETECTED (Status:', status, 'Purpose:', purpose, ')');
         setAuthError('invalid-code');
         authErrorRef.current = 'invalid-code';
         return;
       }
 
-      // Handle Success
+      // 3. Handle Success
       if (status === 'success') {
+        // Distinguish between "Email Sent" and "Authenticated"
         const isEmailSentOnly = purpose.includes('email') && (purpose.includes('send') || purpose.includes('sent'));
         const isActuallyAuthenticated = 
           purpose === 'authenticated' || 
-          (purpose.includes('verify') && !isEmailSentOnly && !purpose.includes('invalid'));
+          (purpose.includes('verify') && !isEmailSentOnly && !isInvalidPurpose);
 
         if (isActuallyAuthenticated) {
           console.log('DEBUG: AUTHENTICATION SUCCESSFUL, LOGGING IN');
           loginRef.current(data);
         } else if (isEmailSentOnly) {
-          console.log('DEBUG: EMAIL SENT SUCCESS MESSAGE');
+          console.log('DEBUG: EMAIL SENT SUCCESS MESSAGE RECEIVED');
           setAuthError(null);
+          authErrorRef.current = null;
         }
       }
     };
@@ -144,7 +151,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const sessionString = localStorage.getItem(SESSION_STORAGE_KEY);
       if (sessionString) {
         const session = JSON.parse(sessionString);
-        if (session.status === 'success' && (session.purpose === 'Authenticated' || session.purpose === 'authenticated')) {
+        // Only restore if it was a successful authentication
+        if (session.status === 'success' && 
+           (session.purpose === 'Authenticated' || session.purpose === 'authenticated')) {
           setUser(session);
         }
       }
