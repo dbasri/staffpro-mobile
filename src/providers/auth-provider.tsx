@@ -70,13 +70,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
+      console.log("AUTH: RAW MESSAGE RECEIVED", { origin: event.origin, data });
 
       // Robust parsing for string data that might have trailing garbage (like the origin URL)
       if (typeof data === 'string') {
         try {
-          // Try standard parse first
-          data = JSON.parse(data);
-        } catch (e) {
           // If direct parse fails, try extracting the first valid JSON object
           // This handles the format: {"status":"fail",...},"https://origin.com"
           const start = data.indexOf('{');
@@ -84,12 +82,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (start !== -1 && end !== -1) {
             try {
               data = JSON.parse(data.substring(start, end + 1));
+              console.log("AUTH: PARSED JSON PAYLOAD", data);
             } catch (innerError) {
+              console.error("AUTH: FAILED TO EXTRACT JSON", innerError);
               return; 
             }
           } else {
             return;
           }
+        } catch (e) {
+          return;
         }
       }
 
@@ -105,7 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // FAIL detection - specifically for verification code
-      if (status === 'fail' && purpose.includes('verify one-time code')) {
+      if (status === 'fail' && (purpose.includes('verify one-time code') || purpose.includes('verify'))) {
+        console.log("AUTH: SETTING ERROR STATE TO 'invalid-code'");
         setAuthError('invalid-code');
         return;
       }
@@ -122,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     window.addEventListener('message', handleServerMessage);
+    console.log("AUTH: LISTENER REGISTERED");
     return () => window.removeEventListener('message', handleServerMessage);
   }, []);
 
@@ -130,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const sessionString = localStorage.getItem(SESSION_STORAGE_KEY);
       if (sessionString) {
         const session = JSON.parse(sessionString);
-        if (session.status === 'success' && session.purpose === 'Authenticated') {
+        if (session.status === 'success' && (session.purpose === 'Authenticated' || session.purpose === 'authenticated')) {
           setUser(session);
           handshakeCompletedRef.current = true;
         }
