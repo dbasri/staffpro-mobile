@@ -26,11 +26,8 @@ function MainPage() {
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
-  // Handle the logoff flow
   useEffect(() => {
     if (isLoggingOut) {
-      // Give the iframe 2 seconds to reach the server logoff endpoint
-      // before clearing the local PWA session and restarting.
       const timer = setTimeout(() => {
         logout();
       }, 2000);
@@ -38,26 +35,21 @@ function MainPage() {
     }
   }, [isLoggingOut, logout]);
 
-  // Redirect to login if not authenticated or verifying
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut) {
       window.location.assign('/login');
     }
   }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut]);
 
-  // Handle code submission by updating state
   const handleCodeSubmit = (code: string) => {
     setVerificationCode(code);
   };
   
-  // Determine the URL based on the current state
   let url: string | null = null;
   
   if (isLoggingOut) {
-    // Explicitly notify server of logoff
     url = `${staffproBaseUrl}?logoff=true`;
   } else if (isAuthenticated && user) {
-    // Final authenticated URL
     const params = new URLSearchParams({
       session: user.session,
       email: user.email,
@@ -65,7 +57,6 @@ function MainPage() {
     });
     url = `${staffproBaseUrl}?${params.toString()}`;
   } else if (isVerifying && emailForVerification) {
-    // URL for verification flow
     const params = new URLSearchParams({
       verification: 'true',
       email: emailForVerification,
@@ -77,7 +68,6 @@ function MainPage() {
     url = `${staffproBaseUrl}?${params.toString()}`;
   }
 
-  // Render logic based on application state
   if (isAuthLoading) {
     return <GlobalLoader />;
   }
@@ -103,7 +93,7 @@ function MainPage() {
           <Button
             onClick={() => setIsLoggingOut(true)}
             variant="destructive"
-            className="pointer-events-auto flex items-center gap-2 rounded-full px-6 shadow-2xl transition-transform hover:scale-105 active:scale-95"
+            className="pointer-events-auto flex items-center gap-2 rounded-full px-8 shadow-2xl transition-transform hover:scale-105 active:scale-95 font-semibold"
             size="lg"
           >
             <LogOut className="h-4 w-4" />
