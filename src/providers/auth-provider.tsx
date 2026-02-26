@@ -71,12 +71,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
 
-      // Robust parsing for string data that might have trailing garbage
+      // Robust parsing for string data that might have trailing garbage (like the origin URL)
       if (typeof data === 'string') {
         try {
+          // Try standard parse first
           data = JSON.parse(data);
         } catch (e) {
           // If direct parse fails, try extracting the first valid JSON object
+          // This handles the format: {"status":"fail",...},"https://origin.com"
           const start = data.indexOf('{');
           const end = data.lastIndexOf('}');
           if (start !== -1 && end !== -1) {
