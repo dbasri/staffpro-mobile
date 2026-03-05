@@ -37,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   const login = useCallback((sessionData: UserSession) => {
+    console.log('AUTH: Logging in with session:', sessionData);
     setUser(sessionData);
     setAuthError(null);
     try {
@@ -47,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    console.log('AUTH: Logging out...');
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } catch (error) {
@@ -60,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Use refs to ensure the message listener always uses the latest functions
   const logoutRef = useRef(logout);
   const loginRef = useRef(login);
 
@@ -70,8 +73,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
+      // Diagnostic log for all incoming messages
+      console.log('DEBUG: RAW MESSAGE RECEIVED AT WINDOW:', event.data, 'FROM:', event.origin);
+
       let data = event.data;
       
+      // Attempt to parse string messages as JSON
       if (typeof data === 'string') {
         try {
           const jsonMatch = data.match(/\{.*\}/);
@@ -90,15 +97,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const status = data.status ? String(data.status).toLowerCase() : '';
       const purpose = data.purpose ? String(data.purpose).toLowerCase() : '';
 
+      // Handle explicit logoff command
       if (status === 'logoff' || purpose === 'logoff') {
         logoutRef.current();
         return;
       }
 
-      // Handle the server's current workaround: status="success" but purpose="Code invalid"
+      // Handle the server's workaround: status="success" but purpose indicates error
       const isInvalidPurpose = purpose.includes('invalid') || purpose.includes('error') || purpose.includes('incorrect');
       
       if (status === 'fail' || (status === 'success' && isInvalidPurpose)) {
+        console.warn('DEBUG: Verification failure detected:', purpose);
         setAuthError('invalid-code');
         return;
       }
@@ -111,8 +120,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           (purpose.includes('verify') && !isEmailSentOnly);
 
         if (isActuallyAuthenticated) {
+          console.log('DEBUG: Successful authentication detected.');
           loginRef.current(data);
         } else if (isEmailSentOnly) {
+          console.log('DEBUG: Email verification code was sent.');
           setAuthError(null);
         }
       }
@@ -143,13 +154,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const passkeyLogin = useCallback(async () => {
     try {
+      console.log('AUTH: Starting Passkey Login...');
       setAuthError(null);
       
       // 1. Get options from server (POST)
       const options = await AuthApi.getPasskeyOptions();
+      console.log('AUTH: Received Passkey Options:', options);
       
       // 2. Start WebAuthn ceremony
       const assertion = await startAuthentication(options);
+      console.log('AUTH: Received Assertion:', assertion);
       
       // 3. Verify with server (POST)
       const result = await AuthApi.verifyPasskey(assertion);
@@ -157,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (result.status === 'success') {
         login(result);
       } else {
-        throw new Error('Passkey verification failed.');
+        throw new Error(result.purpose || 'Passkey verification failed.');
       }
     } catch (error: any) {
       console.error('Passkey Error:', error);
