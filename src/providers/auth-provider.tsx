@@ -73,9 +73,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
-      // Diagnostic log for all incoming messages
-      console.log('DEBUG: RAW MESSAGE RECEIVED AT WINDOW:', event.data, 'FROM:', event.origin);
-
       let data = event.data;
       
       // Attempt to parse string messages as JSON
@@ -103,11 +100,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Handle the server's workaround: status="success" but purpose indicates error
+      // Detect if status="success" but purpose indicates error (your server's workaround)
       const isInvalidPurpose = purpose.includes('invalid') || purpose.includes('error') || purpose.includes('incorrect');
       
       if (status === 'fail' || (status === 'success' && isInvalidPurpose)) {
-        console.warn('DEBUG: Verification failure detected:', purpose);
         setAuthError('invalid-code');
         return;
       }
@@ -120,10 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           (purpose.includes('verify') && !isEmailSentOnly);
 
         if (isActuallyAuthenticated) {
-          console.log('DEBUG: Successful authentication detected.');
           loginRef.current(data);
         } else if (isEmailSentOnly) {
-          console.log('DEBUG: Email verification code was sent.');
           setAuthError(null);
         }
       }
@@ -154,16 +148,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const passkeyLogin = useCallback(async () => {
     try {
-      console.log('AUTH: Starting Passkey Login...');
       setAuthError(null);
       
       // 1. Get options from server (POST)
       const options = await AuthApi.getPasskeyOptions();
-      console.log('AUTH: Received Passkey Options:', options);
       
       // 2. Start WebAuthn ceremony
+      // This will trigger the device's biometric prompt
       const assertion = await startAuthentication(options);
-      console.log('AUTH: Received Assertion:', assertion);
       
       // 3. Verify with server (POST)
       const result = await AuthApi.verifyPasskey(assertion);
@@ -175,9 +167,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error: any) {
       console.error('Passkey Error:', error);
+      
+      // Provide user-friendly messages for common errors
+      let errorMessage = error.message || 'Could not sign in with passkey.';
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Passkey authentication was cancelled or timed out.';
+      } else if (error.name === 'SecurityError') {
+        errorMessage = 'The domain is not authorized for this passkey.';
+      }
+
       toast({
         title: 'Authentication Failed',
-        description: error.message || 'Could not sign in with passkey.',
+        description: errorMessage,
         variant: 'destructive',
       });
     }

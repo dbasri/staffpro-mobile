@@ -9,23 +9,31 @@ export const AuthApi = {
   /**
    * Fetches the WebAuthn authentication options (challenge) from the server.
    * Your server should handle POST at ?passkey=options
+   * Note: You must read the body via file_get_contents('php://input') in PHP.
    */
   async getPasskeyOptions(): Promise<any> {
-    const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ origin: window.location.origin }),
-    });
+    try {
+      const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ origin: window.location.origin }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to fetch passkey options: ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server error (${response.status}): ${errorText || 'Unknown error'}`);
+      }
+
+      return await response.json();
+    } catch (error: any) {
+      if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+        throw new Error('Network error or CORS block. Please check server headers.');
+      }
+      throw error;
     }
-
-    return response.json();
   },
 
   /**
@@ -33,23 +41,30 @@ export const AuthApi = {
    * Your server should handle POST at ?passkey=verify
    */
   async verifyPasskey(assertion: any): Promise<UserSession> {
-    const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        assertion,
-        origin: window.location.origin,
-      }),
-    });
+    try {
+      const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          assertion,
+          origin: window.location.origin,
+        }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Passkey verification failed: ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Verification error (${response.status}): ${errorText || 'Unknown error'}`);
+      }
+
+      return await response.json();
+    } catch (error: any) {
+      if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+        throw new Error('Network error or CORS block during verification.');
+      }
+      throw error;
     }
-
-    return response.json();
   },
 };
