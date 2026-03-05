@@ -4,4 +4,5 @@ export interface UserSession {
   name: string | boolean;
   session: string;
   purpose: string;
+  method?: 'passkey' | 'code';
 }

@@ -1,4 +1,3 @@
-
 import { staffproBaseUrl } from './config';
 import type { UserSession } from '@/types/session';
 
@@ -11,7 +10,7 @@ export const AuthApi = {
    * Your server should handle POST at ?passkey=options
    * Note: You must read the body via file_get_contents('php://input') in PHP.
    */
-  async getPasskeyOptions(): Promise<any> {
+  async getPasskeyOptions(email: string): Promise<any> {
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
         method: 'POST',
@@ -19,7 +18,10 @@ export const AuthApi = {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({ origin: window.location.origin }),
+        body: JSON.stringify({ 
+          origin: window.location.origin,
+          email: email 
+        }),
       });
 
       if (!response.ok) {
@@ -40,7 +42,7 @@ export const AuthApi = {
    * Sends the signed passkey assertion back to the server for verification.
    * Your server should handle POST at ?passkey=verify
    */
-  async verifyPasskey(assertion: any): Promise<UserSession> {
+  async verifyPasskey(assertion: any, email: string): Promise<UserSession> {
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
         method: 'POST',
@@ -51,6 +53,7 @@ export const AuthApi = {
         body: JSON.stringify({
           assertion,
           origin: window.location.origin,
+          email: email
         }),
       });
 

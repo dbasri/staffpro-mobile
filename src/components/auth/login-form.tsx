@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { KeyRound, ShieldCheck, Mail } from 'lucide-react';
+import { KeyRound, ShieldCheck, Mail, Loader2 } from 'lucide-react';
 
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,8 @@ const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 export function LoginForm() {
   const { passkeyLogin } = useAuth();
   const router = useRouter();
-  const [showVerificationForm, setShowVerificationForm] = useState(false);
+  const [loginMethod, setLoginMethod] = useState<'passkey' | 'code' | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<VerificationFormValues>({
     resolver: zodResolver(VerificationSchema),
@@ -39,39 +40,40 @@ export function LoginForm() {
     },
   });
 
-  // Use an effect to set the email from localStorage when the form is shown
   useEffect(() => {
-    if (showVerificationForm) {
+    if (loginMethod) {
       try {
         const storedEmail = localStorage.getItem(EMAIL_STORAGE_KEY) || '';
-        form.reset({ email: storedEmail }); // Use reset for more robust update
+        form.reset({ email: storedEmail });
       } catch (error) {
         console.error('Could not access local storage for email:', error);
       }
     }
-  }, [showVerificationForm, form]);
+  }, [loginMethod, form]);
 
-  const handleLogin = async () => {
-    await passkeyLogin();
-    router.push('/');
-  };
-
-  const handleVerificationSubmit = (data: VerificationFormValues) => {
+  const handleLoginSubmit = async (data: VerificationFormValues) => {
+    setIsSubmitting(true);
     try {
-      // Save the email to localStorage for persistence
       localStorage.setItem(EMAIL_STORAGE_KEY, data.email);
+      
+      if (loginMethod === 'passkey') {
+        await passkeyLogin(data.email);
+        router.push('/');
+      } else if (loginMethod === 'code') {
+        router.push(`/?verification=true&email=${encodeURIComponent(data.email)}`);
+      }
     } catch (error) {
-      console.error('Could not access local storage to save email:', error);
+      console.error('Login error:', error);
+    } finally {
+      setIsSubmitting(false);
     }
-    // Navigate to start the verification process
-    router.push(`/?verification=true&email=${encodeURIComponent(data.email)}`);
   };
 
-  if (showVerificationForm) {
+  if (loginMethod) {
     return (
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit(handleVerificationSubmit)}
+          onSubmit={form.handleSubmit(handleLoginSubmit)}
           className="space-y-4 pt-6"
         >
           <FormField
@@ -95,13 +97,16 @@ export function LoginForm() {
             )}
           />
           <div className="space-y-2">
-            <Button type="submit" className="w-full">
-              Send Verification Code
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Login
             </Button>
             <Button
               variant="ghost"
               className="w-full"
-              onClick={() => setShowVerificationForm(false)}
+              type="button"
+              onClick={() => setLoginMethod(null)}
+              disabled={isSubmitting}
             >
               Back to login options
             </Button>
@@ -114,14 +119,14 @@ export function LoginForm() {
   return (
     <div className="space-y-6">
       <div className="space-y-2 pt-6">
-        <Button variant="outline" className="w-full" onClick={handleLogin}>
+        <Button variant="outline" className="w-full" onClick={() => setLoginMethod('passkey')}>
           <KeyRound className="mr-2" />
           Sign in with a passkey
         </Button>
         <Button
           variant="outline"
           className="w-full"
-          onClick={() => setShowVerificationForm(true)}
+          onClick={() => setLoginMethod('code')}
         >
           <ShieldCheck className="mr-2" />
           Use a verification code

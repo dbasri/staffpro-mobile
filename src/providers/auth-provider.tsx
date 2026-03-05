@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -20,7 +19,7 @@ interface AuthContextType {
   isLoading: boolean;
   authError: string | null;
   login: (sessionData: UserSession) => void;
-  passkeyLogin: () => Promise<void>;
+  passkeyLogin: (email: string) => Promise<void>;
   logout: () => void;
   setAuthError: (error: string | null) => void;
 }
@@ -37,7 +36,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   const login = useCallback((sessionData: UserSession) => {
-    console.log('AUTH: Logging in with session:', sessionData);
     setUser(sessionData);
     setAuthError(null);
     try {
@@ -48,7 +46,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    console.log('AUTH: Logging out...');
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } catch (error) {
@@ -62,7 +59,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Use refs to ensure the message listener always uses the latest functions
   const logoutRef = useRef(logout);
   const loginRef = useRef(login);
 
@@ -75,7 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
       
-      // Attempt to parse string messages as JSON
       if (typeof data === 'string') {
         try {
           const jsonMatch = data.match(/\{.*\}/);
@@ -94,13 +89,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const status = data.status ? String(data.status).toLowerCase() : '';
       const purpose = data.purpose ? String(data.purpose).toLowerCase() : '';
 
-      // Handle explicit logoff command
       if (status === 'logoff' || purpose === 'logoff') {
         logoutRef.current();
         return;
       }
 
-      // Detect if status="success" but purpose indicates error (your server's workaround)
       const isInvalidPurpose = purpose.includes('invalid') || purpose.includes('error') || purpose.includes('incorrect');
       
       if (status === 'fail' || (status === 'success' && isInvalidPurpose)) {
@@ -109,14 +102,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (status === 'success') {
-        // Distinguish between "email sent" and "successfully verified"
         const isEmailSentOnly = purpose.includes('email') && (purpose.includes('send') || purpose.includes('sent'));
         const isActuallyAuthenticated = 
           purpose === 'authenticated' || 
           (purpose.includes('verify') && !isEmailSentOnly);
 
         if (isActuallyAuthenticated) {
-          loginRef.current(data);
+          loginRef.current({ ...data, method: 'code' });
         } else if (isEmailSentOnly) {
           setAuthError(null);
         }
@@ -146,29 +138,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const passkeyLogin = useCallback(async () => {
+  const passkeyLogin = useCallback(async (email: string) => {
     try {
       setAuthError(null);
       
-      // 1. Get options from server (POST)
-      const options = await AuthApi.getPasskeyOptions();
+      // 1. Get options from server (POST) with email
+      const options = await AuthApi.getPasskeyOptions(email);
       
       // 2. Start WebAuthn ceremony
-      // This will trigger the device's biometric prompt
       const assertion = await startAuthentication(options);
       
-      // 3. Verify with server (POST)
-      const result = await AuthApi.verifyPasskey(assertion);
+      // 3. Verify with server (POST) with email
+      const result = await AuthApi.verifyPasskey(assertion, email);
       
       if (result.status === 'success') {
-        login(result);
+        login({ ...result, method: 'passkey' });
       } else {
         throw new Error(result.purpose || 'Passkey verification failed.');
       }
     } catch (error: any) {
       console.error('Passkey Error:', error);
       
-      // Provide user-friendly messages for common errors
       let errorMessage = error.message || 'Could not sign in with passkey.';
       if (error.name === 'NotAllowedError') {
         errorMessage = 'Passkey authentication was cancelled or timed out.';
