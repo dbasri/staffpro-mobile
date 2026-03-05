@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -9,6 +10,9 @@ import {
   useRef,
 } from 'react';
 import type { UserSession } from '@/types/session';
+import { startAuthentication } from '@simplewebauthn/browser';
+import { AuthApi } from '@/lib/auth-api';
+import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
   user: UserSession | null;
@@ -29,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const { toast } = useToast();
   const isAuthenticated = !!user;
 
   const login = useCallback((sessionData: UserSession) => {
@@ -90,15 +95,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const isExplicitFail = status === 'fail' || status === 'unsuccessful' || status === 'error';
+      // Handle the server's current workaround: status="success" but purpose="Code invalid"
       const isInvalidPurpose = purpose.includes('invalid') || purpose.includes('error') || purpose.includes('incorrect');
       
-      if (isExplicitFail || isInvalidPurpose) {
+      if (status === 'fail' || (status === 'success' && isInvalidPurpose)) {
         setAuthError('invalid-code');
         return;
       }
 
       if (status === 'success') {
+        // Distinguish between "email sent" and "successfully verified"
         const isEmailSentOnly = purpose.includes('email') && (purpose.includes('send') || purpose.includes('sent'));
         const isActuallyAuthenticated = 
           purpose === 'authenticated' || 
@@ -136,15 +142,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const passkeyLogin = useCallback(async () => {
-    const mockSession: UserSession = {
-      status: 'success',
-      email: 'passkey-user@example.com',
-      name: 'Passkey User',
-      session: 'mock-session-id-passkey',
-      purpose: 'Authenticated',
-    };
-    login(mockSession);
-  }, [login]);
+    try {
+      setAuthError(null);
+      
+      // 1. Get options from server (POST)
+      const options = await AuthApi.getPasskeyOptions();
+      
+      // 2. Start WebAuthn ceremony
+      const assertion = await startAuthentication(options);
+      
+      // 3. Verify with server (POST)
+      const result = await AuthApi.verifyPasskey(assertion);
+      
+      if (result.status === 'success') {
+        login(result);
+      } else {
+        throw new Error('Passkey verification failed.');
+      }
+    } catch (error: any) {
+      console.error('Passkey Error:', error);
+      toast({
+        title: 'Authentication Failed',
+        description: error.message || 'Could not sign in with passkey.',
+        variant: 'destructive',
+      });
+    }
+  }, [login, toast]);
 
   return (
     <AuthContext.Provider
