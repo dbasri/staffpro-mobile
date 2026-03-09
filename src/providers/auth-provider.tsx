@@ -41,7 +41,7 @@ function cleanBinaryString(val: any): any {
 
 /**
  * Surgically cleans the options object for WebAuthn to satisfy strict library validation.
- * It whitelists only standard keys and handles known platform/PHP-specific non-standardisms.
+ * Instead of whitelisting, we now target specific problematic keys and handle binary wrappers.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -50,44 +50,31 @@ function prepareWebAuthnOptions(obj: any): any {
     return obj.map(prepareWebAuthnOptions);
   }
 
-  const cleaned: any = {};
-  // List of standard WebAuthn keys for Creation and Request options
-  const allowedKeys = [
-    'rp', 'user', 'challenge', 'pubKeyCredParams', 'timeout', 
-    'excludeCredentials', 'authenticatorSelection', 'attestation', 
-    'extensions', 'allowCredentials', 'userVerification', 'rpId'
-  ];
+  const cleaned: any = { ...obj };
 
-  for (const key of allowedKeys) {
-    if (obj[key] !== undefined) {
-      let value = obj[key];
-      
-      // Clean binary fields known to use the binary wrapper
-      if (key === 'challenge' || key === 'id') {
-        value = cleanBinaryString(value);
-      } else if (typeof value === 'object') {
-        value = prepareWebAuthnOptions(value);
-      }
-      
-      cleaned[key] = value;
+  // 1. Recursively clean binary wrappers in all strings
+  for (const key in cleaned) {
+    if (typeof cleaned[key] === 'string') {
+      cleaned[key] = cleanBinaryString(cleaned[key]);
+    } else if (typeof cleaned[key] === 'object') {
+      cleaned[key] = prepareWebAuthnOptions(cleaned[key]);
     }
   }
 
-  // FIX: rp.id must be a valid domain. If it's the placeholder, use the current hostname.
+  // 2. Fix RP ID if it's the placeholder or missing
   if (cleaned.rp && (cleaned.rp.id === 'staffpro_mobile' || !cleaned.rp.id) && typeof window !== 'undefined') {
     cleaned.rp.id = window.location.hostname;
     console.log(`PASSKEY: Overriding RP ID to current hostname: ${cleaned.rp.id}`);
   }
 
-  // FIX: Ensure rpId for Authentication matches current hostname if missing/invalid
+  // 3. Fix Authentication rpId
   if (cleaned.rpId === 'staffpro_mobile' && typeof window !== 'undefined') {
     cleaned.rpId = window.location.hostname;
   }
   
-  // FIX: Remove non-standard "exts" key from extensions which triggers the library warning
+  // 4. Remove non-standard "exts" key from extensions (common warning source)
   if (cleaned.extensions && cleaned.extensions.exts !== undefined) {
     delete cleaned.extensions.exts;
-    // If extensions is now empty, remove it entirely
     if (Object.keys(cleaned.extensions).length === 0) {
       delete cleaned.extensions;
     }
@@ -202,7 +189,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const deviceName = getDeviceName();
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
-      // 1. Unwrap and Surgically Clean the options
       let rawOptions = responseData.publicKey || responseData;
       let options = prepareWebAuthnOptions(rawOptions);
       
@@ -213,7 +199,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       let credentialResponse;
-      // Detect if this is Registration (user + params) or Authentication (allowCredentials)
       const isRegistration = !!(options.user && options.pubKeyCredParams);
       
       if (isRegistration) {
