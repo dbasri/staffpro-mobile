@@ -29,8 +29,7 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
- * Utility to clean MIME-wrapped binary strings (e.g., =?BINARY?B?...?=)
- * and ensure the resulting string is Base64URL encoded (no padding, -, _).
+ * Utility to clean MIME-wrapped binary strings and ensure Base64URL encoding.
  */
 function cleanAndFormatBase64(val: any): any {
   if (typeof val !== 'string') return val;
@@ -48,38 +47,92 @@ function cleanAndFormatBase64(val: any): any {
 }
 
 /**
- * Prepares the options object for WebAuthn by cleaning binary wrappers
- * and ensuring fields are in the strict Base64URL format expected by the SDK.
+ * Surgically reconstructs the options object to satisfy strict WebAuthn structure.
+ * Strips non-standard extensions like 'exts' which trigger library warnings.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
 
-  if (Array.isArray(obj)) {
-    return obj.map(prepareWebAuthnOptions);
+  const options: any = {};
+
+  // 1. Challenge (Required)
+  if (obj.challenge) {
+    options.challenge = cleanAndFormatBase64(obj.challenge);
   }
 
-  const cleaned: any = { ...obj };
+  // 2. RP (Required for Registration)
+  if (obj.rp) {
+    options.rp = {
+      name: obj.rp.name || 'StaffPro',
+      id: (obj.rp.id === 'staffpro_mobile' || !obj.rp.id) && typeof window !== 'undefined' 
+          ? window.location.hostname 
+          : obj.rp.id
+    };
+  }
 
-  // Recursive cleaning of strings and objects
-  for (const key in cleaned) {
-    if (key === 'challenge' || key === 'id') {
-      cleaned[key] = cleanAndFormatBase64(cleaned[key]);
-    } else if (typeof cleaned[key] === 'string' && cleaned[key].startsWith('=?BINARY?B?')) {
-      cleaned[key] = cleanAndFormatBase64(cleaned[key]);
-    } else if (typeof cleaned[key] === 'object') {
-      cleaned[key] = prepareWebAuthnOptions(cleaned[key]);
+  // 3. User (Required for Registration)
+  if (obj.user) {
+    options.user = {
+      id: cleanAndFormatBase64(obj.user.id),
+      name: obj.user.name,
+      displayName: obj.user.displayName || obj.user.name
+    };
+  }
+
+  // 4. pubKeyCredParams (Required for Registration)
+  if (obj.pubKeyCredParams) {
+    options.pubKeyCredParams = obj.pubKeyCredParams.map((p: any) => ({
+      type: p.type || 'public-key',
+      alg: p.alg
+    }));
+  }
+
+  // 5. excludeCredentials / allowCredentials
+  if (obj.excludeCredentials) {
+    options.excludeCredentials = obj.excludeCredentials.map((c: any) => ({
+      id: cleanAndFormatBase64(c.id),
+      type: c.type || 'public-key',
+      transports: c.transports
+    }));
+  }
+  if (obj.allowCredentials) {
+    options.allowCredentials = obj.allowCredentials.map((c: any) => ({
+      id: cleanAndFormatBase64(c.id),
+      type: c.type || 'public-key',
+      transports: c.transports
+    }));
+  }
+
+  // 6. authenticatorSelection
+  if (obj.authenticatorSelection) {
+    options.authenticatorSelection = { ...obj.authenticatorSelection };
+  }
+
+  // 7. attestation
+  if (obj.attestation) {
+    options.attestation = obj.attestation;
+  }
+
+  // 8. timeout
+  if (obj.timeout) {
+    options.timeout = obj.timeout;
+  }
+
+  // 9. Extensions - Only include standard WebAuthn extensions
+  if (obj.extensions) {
+    const validExtensions: any = {};
+    const standardExtensions = ['credProps', 'hmacCreateSecret', 'uvm'];
+    for (const key of standardExtensions) {
+      if (obj.extensions[key] !== undefined) {
+        validExtensions[key] = obj.extensions[key];
+      }
+    }
+    if (Object.keys(validExtensions).length > 0) {
+      options.extensions = validExtensions;
     }
   }
 
-  // rp.id override if needed
-  if (cleaned.rp && (cleaned.rp.id === 'staffpro_mobile' || !cleaned.rp.id) && typeof window !== 'undefined') {
-    cleaned.rp.id = window.location.hostname;
-  }
-  if (cleaned.rpId === 'staffpro_mobile' && typeof window !== 'undefined') {
-    cleaned.rpId = window.location.hostname;
-  }
-
-  return cleaned;
+  return options;
 }
 
 function getDeviceName(): string {
@@ -218,12 +271,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       console.error('PASSKEY: Error in passkeyLogin flow:', error);
       let errorMessage = error.message || 'Could not sign in with passkey.';
-      if (error.name === 'NotAllowedError') errorMessage = 'Passkey authentication was cancelled or timed out.';
-      else if (error.name === 'SecurityError') errorMessage = `Security Error: The RP ID must match the origin domain. Check your server configuration.`;
+      
+      // Detailed error mapping for troubleshooting
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Passkey authentication was cancelled or timed out.';
+      } else if (error.name === 'SecurityError') {
+        errorMessage = `Security Error: The RP ID must match the origin domain (${window.location.hostname}).`;
+      } else if (error.name === 'InvalidStateError') {
+        errorMessage = 'This device is already registered or the passkey is invalid for this request.';
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = 'Passkeys are not supported on this browser or device.';
+      }
       
       toast({
         title: 'Authentication Failed',
-        description: errorMessage,
+        description: `${error.name}: ${errorMessage}`,
         variant: 'destructive',
       });
     }
