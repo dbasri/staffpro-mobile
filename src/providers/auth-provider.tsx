@@ -55,7 +55,7 @@ function prepareWebAuthnOptions(obj: any): any {
   const allowedKeys = [
     'rp', 'user', 'challenge', 'pubKeyCredParams', 'timeout', 
     'excludeCredentials', 'authenticatorSelection', 'attestation', 
-    'extensions', 'allowCredentials', 'userVerification'
+    'extensions', 'allowCredentials', 'userVerification', 'rpId'
   ];
 
   for (const key of allowedKeys) {
@@ -77,6 +77,11 @@ function prepareWebAuthnOptions(obj: any): any {
   if (cleaned.rp && (cleaned.rp.id === 'staffpro_mobile' || !cleaned.rp.id) && typeof window !== 'undefined') {
     cleaned.rp.id = window.location.hostname;
     console.log(`PASSKEY: Overriding RP ID to current hostname: ${cleaned.rp.id}`);
+  }
+
+  // FIX: Ensure rpId for Authentication matches current hostname if missing/invalid
+  if (cleaned.rpId === 'staffpro_mobile' && typeof window !== 'undefined') {
+    cleaned.rpId = window.location.hostname;
   }
   
   // FIX: Remove non-standard "exts" key from extensions which triggers the library warning
@@ -230,7 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('PASSKEY: Error in passkeyLogin flow:', error);
       let errorMessage = error.message || 'Could not sign in with passkey.';
       if (error.name === 'NotAllowedError') errorMessage = 'Passkey authentication was cancelled or timed out.';
-      else if (error.name === 'SecurityError') errorMessage = `Security Error: The RP ID "${window.location.hostname}" must match the origin.`;
+      else if (error.name === 'SecurityError') errorMessage = `Security Error: The RP ID must match the origin domain. Check your server configuration.`;
       
       toast({
         title: 'Authentication Failed',

@@ -40,14 +40,6 @@ export const AuthApi = {
 
       const options = await response.json();
       console.log('PASSKEY: Successfully received options JSON from server:', options);
-      
-      const webAuthnOptions = options.publicKey || options;
-      
-      // DIAGNOSTIC: Check structure
-      if (!webAuthnOptions.challenge) {
-        console.error('PASSKEY: NO CHALLENGE FOUND IN RESPONSE. Keys found:', Object.keys(webAuthnOptions));
-      }
-
       return options;
     } catch (error: any) {
       console.error('PASSKEY: Fetch operation failed.', error);
