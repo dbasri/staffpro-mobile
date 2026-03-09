@@ -12,6 +12,7 @@ export const AuthApi = {
    */
   async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     try {
+      console.log(`PASSKEY: Requesting options for ${email} from ${staffproBaseUrl}?passkey=options`);
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
         method: 'POST',
         headers: { 
@@ -27,11 +28,15 @@ export const AuthApi = {
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`PASSKEY: Server returned error ${response.status}:`, errorText);
         throw new Error(`Server error (${response.status}): ${errorText || 'Unknown error'}`);
       }
 
-      return await response.json();
+      const options = await response.json();
+      console.log('PASSKEY: Received options JSON:', options);
+      return options;
     } catch (error: any) {
+      console.error('PASSKEY: Fetch error in getPasskeyOptions:', error);
       if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
         throw new Error('Network error or CORS block. Please check server headers.');
       }
@@ -45,6 +50,7 @@ export const AuthApi = {
    */
   async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     try {
+      console.log(`PASSKEY: Verifying assertion for ${email} at ${staffproBaseUrl}?passkey=verify`);
       const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
         method: 'POST',
         headers: { 
@@ -61,11 +67,15 @@ export const AuthApi = {
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`PASSKEY: Verification server error ${response.status}:`, errorText);
         throw new Error(`Verification error (${response.status}): ${errorText || 'Unknown error'}`);
       }
 
-      return await response.json();
+      const result = await response.json();
+      console.log('PASSKEY: Verification result:', result);
+      return result;
     } catch (error: any) {
+      console.error('PASSKEY: Fetch error in verifyPasskey:', error);
       if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
         throw new Error('Network error or CORS block during verification.');
       }

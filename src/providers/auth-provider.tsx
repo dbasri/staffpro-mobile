@@ -50,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   const login = useCallback((sessionData: UserSession) => {
+    console.log('AUTH: Logging in user:', sessionData.email);
     setUser(sessionData);
     setAuthError(null);
     try {
@@ -60,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    console.log('AUTH: Logging out');
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } catch (error) {
@@ -162,31 +164,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Passkey Login flow (Direct POST/JSON, no iframe)
   const passkeyLogin = useCallback(async (email: string) => {
     try {
+      console.log('PASSKEY: Starting flow for', email);
       setAuthError(null);
       const deviceName = getDeviceName();
       
       // 1. Get options from server via POST
       const options = await AuthApi.getPasskeyOptions(email, deviceName);
+      console.log('PASSKEY: Handing options to browser ceremony...');
       
       // 2. Browser handles local biometric ceremony
+      // NOTE: startAuthentication is for login. Use startRegistration if your server sends CreationOptions.
       const assertion = await startAuthentication(options);
+      console.log('PASSKEY: Browser ceremony successful. Sending assertion to server...');
       
       // 3. Verify signature with server via POST
       const result = await AuthApi.verifyPasskey(assertion, email, deviceName);
       
       if (result.status === 'success') {
+        console.log('PASSKEY: Authentication successful!');
         login({ ...result, method: 'passkey' });
       } else {
         throw new Error(result.purpose || 'Passkey verification failed.');
       }
     } catch (error: any) {
-      console.error('Passkey Error:', error);
+      console.error('PASSKEY: Error in passkeyLogin flow:', error);
       
       let errorMessage = error.message || 'Could not sign in with passkey.';
       if (error.name === 'NotAllowedError') {
         errorMessage = 'Passkey authentication was cancelled or timed out.';
       } else if (error.name === 'SecurityError') {
         errorMessage = 'The domain is not authorized for this passkey.';
+      } else if (error.name === 'TypeError') {
+        errorMessage = 'Invalid data received from server. Check console for details.';
       }
 
       toast({
