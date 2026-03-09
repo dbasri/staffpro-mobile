@@ -3,12 +3,12 @@ import type { UserSession } from '@/types/session';
 
 /**
  * Service to handle direct POST communications with the StaffPro authentication endpoints.
+ * These methods use the fetch API and expect raw JSON responses from the server.
  */
 export const AuthApi = {
   /**
    * Fetches the WebAuthn authentication options (challenge) from the server.
-   * Your server should handle POST at ?passkey=options
-   * Note: You must read the body via file_get_contents('php://input') in PHP.
+   * Server should respond with: header('Content-Type: application/json'); echo json_encode($options); exit;
    */
   async getPasskeyOptions(email: string): Promise<any> {
     try {
@@ -40,7 +40,7 @@ export const AuthApi = {
 
   /**
    * Sends the signed passkey assertion back to the server for verification.
-   * Your server should handle POST at ?passkey=verify
+   * Server should respond with: header('Content-Type: application/json'); echo json_encode($userSession); exit;
    */
   async verifyPasskey(assertion: any, email: string): Promise<UserSession> {
     try {

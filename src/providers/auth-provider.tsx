@@ -67,17 +67,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loginRef.current = login;
   }, [logout, login]);
 
+  // Listener for Iframe postMessage (used for Code Verification flow)
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
-      // Only listen to messages from the trusted origin
-      // if (event.origin !== 'https://mystaffpro.com') return;
-
       let data = event.data;
       
-      // Attempt to parse JSON if the message is a string (some PHP setups send raw strings)
       if (typeof data === 'string') {
         try {
-          // Look for JSON pattern within the string
           const jsonMatch = data.match(/\{.*\}/);
           if (jsonMatch) {
             data = JSON.parse(jsonMatch[0]);
@@ -91,17 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!data || typeof data !== 'object') return;
 
-      // Normalize fields for comparison
       const status = data.status ? String(data.status).toLowerCase() : '';
       const purpose = data.purpose ? String(data.purpose).toLowerCase() : '';
 
-      // Handle explicit logoff
       if (status === 'logoff' || purpose === 'logoff') {
         logoutRef.current();
         return;
       }
 
-      // Handle verification failures (e.g. status "fail" or purpose "Code invalid")
       const isInvalidPurpose = purpose.includes('invalid') || purpose.includes('error') || purpose.includes('incorrect');
       
       if (status === 'fail' || (status === 'success' && isInvalidPurpose)) {
@@ -109,7 +102,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Handle successful authentication from iframe (Code flow)
       if (status === 'success') {
         const isEmailSentOnly = purpose.includes('email') && (purpose.includes('send') || purpose.includes('sent'));
         const isActuallyAuthenticated = 
@@ -130,13 +122,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Restore session on mount
   useEffect(() => {
     try {
       const sessionString = localStorage.getItem(SESSION_STORAGE_KEY);
       if (sessionString) {
         const session = JSON.parse(sessionString);
-        if (session.status === 'success' && 
-           (session.purpose === 'Authenticated' || session.purpose === 'authenticated')) {
+        if (session.status === 'success') {
           setUser(session);
         }
       }
@@ -147,17 +139,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Passkey Login flow (Direct POST/JSON, no iframe)
   const passkeyLogin = useCallback(async (email: string) => {
     try {
       setAuthError(null);
       
-      // 1. Get options from server (POST) with email
+      // 1. Get options from server via POST
       const options = await AuthApi.getPasskeyOptions(email);
       
-      // 2. Start WebAuthn ceremony
+      // 2. Browser handles local biometric ceremony
       const assertion = await startAuthentication(options);
       
-      // 3. Verify with server (POST) with email
+      // 3. Verify signature with server via POST
       const result = await AuthApi.verifyPasskey(assertion, email);
       
       if (result.status === 'success') {
