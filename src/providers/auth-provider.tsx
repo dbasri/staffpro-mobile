@@ -69,10 +69,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
+      // Only listen to messages from the trusted origin
+      // if (event.origin !== 'https://mystaffpro.com') return;
+
       let data = event.data;
       
+      // Attempt to parse JSON if the message is a string (some PHP setups send raw strings)
       if (typeof data === 'string') {
         try {
+          // Look for JSON pattern within the string
           const jsonMatch = data.match(/\{.*\}/);
           if (jsonMatch) {
             data = JSON.parse(jsonMatch[0]);
@@ -86,14 +91,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!data || typeof data !== 'object') return;
 
+      // Normalize fields for comparison
       const status = data.status ? String(data.status).toLowerCase() : '';
       const purpose = data.purpose ? String(data.purpose).toLowerCase() : '';
 
+      // Handle explicit logoff
       if (status === 'logoff' || purpose === 'logoff') {
         logoutRef.current();
         return;
       }
 
+      // Handle verification failures (e.g. status "fail" or purpose "Code invalid")
       const isInvalidPurpose = purpose.includes('invalid') || purpose.includes('error') || purpose.includes('incorrect');
       
       if (status === 'fail' || (status === 'success' && isInvalidPurpose)) {
@@ -101,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Handle successful authentication from iframe (Code flow)
       if (status === 'success') {
         const isEmailSentOnly = purpose.includes('email') && (purpose.includes('send') || purpose.includes('sent'));
         const isActuallyAuthenticated = 
