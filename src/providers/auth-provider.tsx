@@ -9,7 +9,7 @@ import {
   useRef,
 } from 'react';
 import type { UserSession } from '@/types/session';
-import { startAuthentication } from '@simplewebauthn/browser';
+import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
 import { AuthApi } from '@/lib/auth-api';
 import { useToast } from '@/hooks/use-toast';
 
@@ -161,7 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Passkey Login flow (Direct POST/JSON, no iframe)
+  // Passkey Login/Registration flow (Direct POST/JSON, no iframe)
   const passkeyLogin = useCallback(async (email: string) => {
     try {
       console.log('PASSKEY: Starting flow for', email);
@@ -170,15 +170,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // 1. Get options from server via POST
       const options = await AuthApi.getPasskeyOptions(email, deviceName);
-      console.log('PASSKEY: Handing options to browser ceremony...');
       
-      // 2. Browser handles local biometric ceremony
-      // NOTE: startAuthentication is for login. Use startRegistration if your server sends CreationOptions.
-      const assertion = await startAuthentication(options);
-      console.log('PASSKEY: Browser ceremony successful. Sending assertion to server...');
+      let credentialResponse;
+
+      // Determine if server wants Registration or Authentication
+      // Registration options contain 'user' and 'pubKeyCredParams'
+      if (options.publicKey && options.publicKey.user && options.publicKey.pubKeyCredParams) {
+        console.log('PASSKEY: Detected Registration Options. Starting registration ceremony...');
+        credentialResponse = await startRegistration(options);
+      } else {
+        console.log('PASSKEY: Detected Authentication Options. Starting authentication ceremony...');
+        credentialResponse = await startAuthentication(options);
+      }
       
-      // 3. Verify signature with server via POST
-      const result = await AuthApi.verifyPasskey(assertion, email, deviceName);
+      console.log('PASSKEY: Browser ceremony successful. Sending response to server...');
+      
+      // 3. Verify response with server via POST
+      const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
         console.log('PASSKEY: Authentication successful!');
