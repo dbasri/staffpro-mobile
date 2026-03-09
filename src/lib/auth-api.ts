@@ -19,7 +19,7 @@ export const AuthApi = {
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
         method: 'POST',
-        mode: 'cors', // Explicitly set CORS mode
+        mode: 'cors',
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
@@ -41,16 +41,17 @@ export const AuthApi = {
       const options = await response.json();
       console.log('PASSKEY: Successfully received options JSON from server:', options);
       
-      // DIAGNOSTIC: Check if server sent the right type of options
-      if (options.publicKey && options.publicKey.user && options.publicKey.pubKeyCredParams) {
-        console.warn('PASSKEY: Server sent CreationOptions (Registration). For Login, it should send RequestOptions (allowCredentials).');
+      const webAuthnOptions = options.publicKey || options;
+      
+      // DIAGNOSTIC: Check structure
+      if (!webAuthnOptions.challenge) {
+        console.error('PASSKEY: NO CHALLENGE FOUND IN RESPONSE. Keys found:', Object.keys(webAuthnOptions));
       }
 
       return options;
     } catch (error: any) {
       console.error('PASSKEY: Fetch operation failed.', error);
       
-      // Distinguish between network errors (CORS/Offline) and other errors
       if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
         throw new Error(`Network error or CORS block. Ensure server at ${staffproBaseUrl} returns 'Access-Control-Allow-Origin: ${origin}' in the POST response.`);
       }

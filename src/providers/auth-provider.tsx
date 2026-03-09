@@ -173,14 +173,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       let credentialResponse;
 
+      // Smart Unwrapping: Detect if server wrapped options in a 'publicKey' property
+      const webAuthnOptions = options.publicKey || options;
+      
+      console.log('PASSKEY: Processing options with keys:', Object.keys(webAuthnOptions));
+
       // Determine if server wants Registration or Authentication
       // Registration options contain 'user' and 'pubKeyCredParams'
-      if (options.publicKey && options.publicKey.user && options.publicKey.pubKeyCredParams) {
+      if (webAuthnOptions.user && webAuthnOptions.pubKeyCredParams) {
         console.log('PASSKEY: Detected Registration Options. Starting registration ceremony...');
-        credentialResponse = await startRegistration(options);
+        if (!webAuthnOptions.challenge) {
+          throw new Error('Server response missing "challenge" property in registration options.');
+        }
+        credentialResponse = await startRegistration(webAuthnOptions);
       } else {
         console.log('PASSKEY: Detected Authentication Options. Starting authentication ceremony...');
-        credentialResponse = await startAuthentication(options);
+        if (!webAuthnOptions.challenge) {
+          throw new Error('Server response missing "challenge" property in authentication options.');
+        }
+        credentialResponse = await startAuthentication(webAuthnOptions);
       }
       
       console.log('PASSKEY: Browser ceremony successful. Sending response to server...');
