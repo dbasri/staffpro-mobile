@@ -169,28 +169,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const deviceName = getDeviceName();
       
       // 1. Get options from server via POST
-      const options = await AuthApi.getPasskeyOptions(email, deviceName);
+      const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
-      let credentialResponse;
+      // Smart Unwrapping:
+      // If server sends { "publicKey": { ...options... } }, use inner object.
+      // Otherwise, use the response but remove fields that aren't part of WebAuthn spec.
+      let webAuthnOptions: any;
+      if (responseData.publicKey) {
+        console.log('PASSKEY: Unwrapping publicKey property from server response.');
+        webAuthnOptions = responseData.publicKey;
+      } else {
+        console.log('PASSKEY: Using raw response object, filtering non-spec fields.');
+        // Create a copy and remove non-standard fields like status/purpose/email
+        const { status, purpose, email: _, ...rest } = responseData;
+        webAuthnOptions = rest;
+      }
+      
+      console.log('PASSKEY: Options keys found:', Object.keys(webAuthnOptions));
 
-      // Smart Unwrapping: Detect if server wrapped options in a 'publicKey' property
-      const webAuthnOptions = options.publicKey || options;
-      
-      console.log('PASSKEY: Processing options with keys:', Object.keys(webAuthnOptions));
+      if (!webAuthnOptions.challenge) {
+        console.error('PASSKEY: Critical error - "challenge" is missing in extracted options:', webAuthnOptions);
+        throw new Error('Server response missing "challenge" property.');
+      }
+
+      let credentialResponse;
 
       // Determine if server wants Registration or Authentication
       // Registration options contain 'user' and 'pubKeyCredParams'
-      if (webAuthnOptions.user && webAuthnOptions.pubKeyCredParams) {
-        console.log('PASSKEY: Detected Registration Options. Starting registration ceremony...');
-        if (!webAuthnOptions.challenge) {
-          throw new Error('Server response missing "challenge" property in registration options.');
-        }
+      const isRegistration = !!(webAuthnOptions.user && webAuthnOptions.pubKeyCredParams);
+      
+      if (isRegistration) {
+        console.log('PASSKEY: Detected Registration Options. Calling startRegistration...');
         credentialResponse = await startRegistration(webAuthnOptions);
       } else {
-        console.log('PASSKEY: Detected Authentication Options. Starting authentication ceremony...');
-        if (!webAuthnOptions.challenge) {
-          throw new Error('Server response missing "challenge" property in authentication options.');
-        }
+        console.log('PASSKEY: Detected Authentication Options. Calling startAuthentication...');
         credentialResponse = await startAuthentication(webAuthnOptions);
       }
       
