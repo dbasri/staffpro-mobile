@@ -40,7 +40,8 @@ function cleanBinaryString(val: any): any {
 }
 
 /**
- * Recursively cleans the options object for WebAuthn.
+ * Surgically cleans the options object for WebAuthn to satisfy strict library validation.
+ * It whitelists only standard keys and handles known platform/PHP-specific non-standardisms.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -50,18 +51,43 @@ function prepareWebAuthnOptions(obj: any): any {
   }
 
   const cleaned: any = {};
-  for (const key in obj) {
-    let value = obj[key];
-    
-    // Clean binary fields known to use this encoding
-    if (key === 'challenge' || key === 'id') {
-      value = cleanBinaryString(value);
-    } else if (typeof value === 'object') {
-      value = prepareWebAuthnOptions(value);
+  // List of standard WebAuthn keys for Creation and Request options
+  const allowedKeys = [
+    'rp', 'user', 'challenge', 'pubKeyCredParams', 'timeout', 
+    'excludeCredentials', 'authenticatorSelection', 'attestation', 
+    'extensions', 'allowCredentials', 'userVerification'
+  ];
+
+  for (const key of allowedKeys) {
+    if (obj[key] !== undefined) {
+      let value = obj[key];
+      
+      // Clean binary fields known to use the binary wrapper
+      if (key === 'challenge' || key === 'id') {
+        value = cleanBinaryString(value);
+      } else if (typeof value === 'object') {
+        value = prepareWebAuthnOptions(value);
+      }
+      
+      cleaned[key] = value;
     }
-    
-    cleaned[key] = value;
   }
+
+  // FIX: rp.id must be a valid domain. If it's the placeholder, use the current hostname.
+  if (cleaned.rp && (cleaned.rp.id === 'staffpro_mobile' || !cleaned.rp.id) && typeof window !== 'undefined') {
+    cleaned.rp.id = window.location.hostname;
+    console.log(`PASSKEY: Overriding RP ID to current hostname: ${cleaned.rp.id}`);
+  }
+  
+  // FIX: Remove non-standard "exts" key from extensions which triggers the library warning
+  if (cleaned.extensions && cleaned.extensions.exts !== undefined) {
+    delete cleaned.extensions.exts;
+    // If extensions is now empty, remove it entirely
+    if (Object.keys(cleaned.extensions).length === 0) {
+      delete cleaned.extensions;
+    }
+  }
+
   return cleaned;
 }
 
@@ -171,17 +197,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const deviceName = getDeviceName();
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
-      // 1. Unwrap and Clean the options
+      // 1. Unwrap and Surgically Clean the options
       let rawOptions = responseData.publicKey || responseData;
       let options = prepareWebAuthnOptions(rawOptions);
       
-      console.log('PASSKEY: Ceremony Options Object (Cleaned):', JSON.stringify(options, null, 2));
+      console.log('PASSKEY: Ceremony Options Object (Final Cleaned):', JSON.stringify(options, null, 2));
 
       if (!options.challenge) {
         throw new Error('Server response missing "challenge" property.');
       }
 
       let credentialResponse;
+      // Detect if this is Registration (user + params) or Authentication (allowCredentials)
       const isRegistration = !!(options.user && options.pubKeyCredParams);
       
       if (isRegistration) {
@@ -203,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('PASSKEY: Error in passkeyLogin flow:', error);
       let errorMessage = error.message || 'Could not sign in with passkey.';
       if (error.name === 'NotAllowedError') errorMessage = 'Passkey authentication was cancelled or timed out.';
-      else if (error.name === 'SecurityError') errorMessage = 'The domain is not authorized for this passkey. Check rp.id setting on server.';
+      else if (error.name === 'SecurityError') errorMessage = `Security Error: The RP ID "${window.location.hostname}" must match the origin.`;
       
       toast({
         title: 'Authentication Failed',
