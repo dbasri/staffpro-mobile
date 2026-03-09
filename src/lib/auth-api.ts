@@ -10,7 +10,7 @@ export const AuthApi = {
    * Fetches the WebAuthn authentication options (challenge) from the server.
    * Server should respond with: header('Content-Type: application/json'); echo json_encode($options); exit;
    */
-  async getPasskeyOptions(email: string): Promise<any> {
+  async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
         method: 'POST',
@@ -20,7 +20,8 @@ export const AuthApi = {
         },
         body: JSON.stringify({ 
           origin: window.location.origin,
-          email: email 
+          email: email,
+          deviceName: deviceName
         }),
       });
 
@@ -42,7 +43,7 @@ export const AuthApi = {
    * Sends the signed passkey assertion back to the server for verification.
    * Server should respond with: header('Content-Type: application/json'); echo json_encode($userSession); exit;
    */
-  async verifyPasskey(assertion: any, email: string): Promise<UserSession> {
+  async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
         method: 'POST',
@@ -53,7 +54,8 @@ export const AuthApi = {
         body: JSON.stringify({
           assertion,
           origin: window.location.origin,
-          email: email
+          email: email,
+          deviceName: deviceName
         }),
       });
 

@@ -28,6 +28,20 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
+/**
+ * Simple helper to derive a readable device name from User Agent.
+ */
+function getDeviceName(): string {
+  if (typeof window === 'undefined') return 'Unknown';
+  const ua = window.navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(ua)) return 'iOS Device';
+  if (/Android/.test(ua)) return 'Android Device';
+  if (/Macintosh/.test(ua)) return 'Mac';
+  if (/Windows/.test(ua)) return 'Windows PC';
+  if (/Linux/.test(ua)) return 'Linux Device';
+  return 'Mobile/Web Browser';
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
       
+      // Robust JSON extraction
       if (typeof data === 'string') {
         try {
           const jsonMatch = data.match(/\{.*\}/);
@@ -95,7 +110,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const isInvalidPurpose = purpose.includes('invalid') || purpose.includes('error') || purpose.includes('incorrect');
+      // Handle the server's "Code invalid" workaround where status is success
+      const isInvalidPurpose = 
+        purpose.includes('invalid') || 
+        purpose.includes('error') || 
+        purpose.includes('incorrect') ||
+        purpose.includes('fail');
       
       if (status === 'fail' || (status === 'success' && isInvalidPurpose)) {
         setAuthError('invalid-code');
@@ -143,15 +163,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const passkeyLogin = useCallback(async (email: string) => {
     try {
       setAuthError(null);
+      const deviceName = getDeviceName();
       
       // 1. Get options from server via POST
-      const options = await AuthApi.getPasskeyOptions(email);
+      const options = await AuthApi.getPasskeyOptions(email, deviceName);
       
       // 2. Browser handles local biometric ceremony
       const assertion = await startAuthentication(options);
       
       // 3. Verify signature with server via POST
-      const result = await AuthApi.verifyPasskey(assertion, email);
+      const result = await AuthApi.verifyPasskey(assertion, email, deviceName);
       
       if (result.status === 'success') {
         login({ ...result, method: 'passkey' });
