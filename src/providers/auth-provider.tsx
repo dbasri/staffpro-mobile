@@ -65,7 +65,7 @@ function prepareWebAuthnOptions(obj: any): any {
     rp: {
       name: obj.rp?.name || 'StaffPro',
       // Priority: 1. Server-provided ID (if not placeholder), 2. Current Hostname
-      id: (obj.rp?.id && obj.rp.id !== 'staffpro_mobile') 
+      id: (obj.rp?.id && obj.rp.id !== 'staffpro_mobile' && obj.rp.id !== 'mystaffpro.com') 
           ? obj.rp.id 
           : (typeof window !== 'undefined' ? window.location.hostname : '')
     },
