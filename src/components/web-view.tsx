@@ -26,7 +26,7 @@ function WebView({ url }: WebViewProps) {
         onLoad={handleLoad}
         title="Web Content"
         className="absolute inset-0 h-full w-full border-0"
-        allow="camera; microphone; geolocation; publickey-credentials-create; publickey-credentials-get"
+        allow="camera; microphone; geolocation; publickey-credentials-create; publickey-credentials-get; clipboard-write; display-capture"
       />
     </div>
   );

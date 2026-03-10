@@ -34,7 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
-        <link rel="manifest" href="/manifest.json" crossOrigin="anonymous" />
+        <link rel="manifest" href="/manifest.json" crossOrigin="use-credentials" />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png"></link>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
