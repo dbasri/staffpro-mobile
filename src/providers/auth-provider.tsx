@@ -35,6 +35,7 @@ function cleanAndFormatBase64(val: any): string {
   if (typeof val !== 'string') return '';
   
   let cleaned = val;
+  // Strip common MIME binary wrappers if present
   if (cleaned.startsWith('=?BINARY?B?')) {
     cleaned = cleaned.replace('=?BINARY?B?', '').replace('?=', '');
   }
@@ -46,19 +47,20 @@ function cleanAndFormatBase64(val: any): string {
 }
 
 /**
- * Reconstructs a pure WebAuthn options object to satisfy strict JSON schema checks.
+ * Reconstructs a pure WebAuthn options object to satisfy strict library checks.
+ * Strips non-standard extensions and ensures only spec-compliant keys are sent to the browser.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
 
   const isRegistration = !!(obj.user && obj.user.id);
 
-  // Start with common fields
+  // Reconstruct a "Pure" WebAuthn object to avoid "startRegistration() was not called correctly" warnings.
   const options: any = {
     challenge: cleanAndFormatBase64(obj.challenge),
     rp: {
       name: obj.rp?.name || 'StaffPro',
-      id: obj.rp?.id, // Using server-provided RP ID directly
+      id: obj.rp?.id,
     },
     timeout: Number(obj.timeout) || 60000,
   };
@@ -104,7 +106,7 @@ function prepareWebAuthnOptions(obj: any): any {
     options.userVerification = obj.userVerification || 'preferred';
   }
 
-  // Extensions are whitelisted to avoid library warnings from non-standard keys like 'exts'
+  // Only whitelist standard extensions to satisfy library validation
   if (obj.extensions && typeof obj.extensions === 'object') {
     const validExtensions: any = {};
     if (obj.extensions.credProps !== undefined) validExtensions.credProps = obj.extensions.credProps;
@@ -221,13 +223,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setAuthError(null);
       const deviceName = getDeviceName();
-      const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
+      // 1. Get options from server
+      const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       const rawOptions = responseData.publicKey || responseData;
+      
+      // 2. Prepare/Clean options for the browser to satisfy library requirements
       const options = prepareWebAuthnOptions(rawOptions);
       
-      console.log('PASSKEY: Ceremony Options Object (Final Cleaned):', JSON.stringify(options, null, 2));
-
       if (!options.challenge) {
         throw new Error('Server response missing "challenge" property.');
       }
@@ -243,6 +246,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         credentialResponse = await startAuthentication(options);
       }
       
+      // 3. Verify assertion/attestation with server
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
@@ -255,7 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let errorMessage = error.message || 'Could not sign in with passkey.';
       
       if (error.name === 'SecurityError') {
-        errorMessage = `SecurityError: The RP ID (${options.rp?.id}) must match the origin domain (${window.location.hostname}).`;
+        errorMessage = `SecurityError: The RP ID must match the origin domain (${window.location.hostname}).`;
       } else if (error.name === 'NotAllowedError') {
         errorMessage = 'Permissions Policy block or user cancelled. Ensure you are in a top-level tab.';
       } else if (error.name === 'NotSupportedError') {
