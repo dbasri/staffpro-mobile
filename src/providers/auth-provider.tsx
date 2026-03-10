@@ -64,10 +64,7 @@ function prepareWebAuthnOptions(obj: any): any {
     challenge: cleanAndFormatBase64(obj.challenge),
     rp: {
       name: obj.rp?.name || 'StaffPro',
-      // Priority: 1. Server-provided ID (if not placeholder), 2. Current Hostname
-      id: (obj.rp?.id && obj.rp.id !== 'staffpro_mobile' && obj.rp.id !== 'mystaffpro.com') 
-          ? obj.rp.id 
-          : (typeof window !== 'undefined' ? window.location.hostname : '')
+      id: obj.rp?.id
     },
     timeout: Number(obj.timeout) || 60000,
   };
