@@ -29,12 +29,14 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
- * Utility to clean MIME-wrapped binary strings and ensure Base64URL encoding.
+ * Utility to clean MIME-wrapped binary strings and ensure strict Base64URL encoding.
+ * WebAuthn challenge and IDs MUST be Base64URL (no padding, - and _ instead of + and /).
  */
-function cleanAndFormatBase64(val: any): any {
-  if (typeof val !== 'string') return val;
+function cleanAndFormatBase64(val: any): string {
+  if (typeof val !== 'string') return '';
   
   let cleaned = val;
+  // Strip MIME binary headers if present
   if (cleaned.startsWith('=?BINARY?B?')) {
     cleaned = cleaned.replace('=?BINARY?B?', '').replace('?=', '');
   }
@@ -53,80 +55,64 @@ function cleanAndFormatBase64(val: any): any {
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
 
-  const options: any = {};
+  // We construct a brand new object using ONLY standard WebAuthn keys.
+  // This satisfies the @simplewebauthn/browser's strict JSON schema check.
+  const options: any = {
+    challenge: cleanAndFormatBase64(obj.challenge),
+    rp: {
+      name: obj.rp?.name || 'StaffPro',
+      // CRITICAL: RP ID must exactly match the browser hostname for security.
+      id: typeof window !== 'undefined' ? window.location.hostname : (obj.rp?.id || '')
+    },
+    user: {
+      id: cleanAndFormatBase64(obj.user?.id),
+      name: obj.user?.name || '',
+      displayName: obj.user?.displayName || obj.user?.name || ''
+    },
+    pubKeyCredParams: (obj.pubKeyCredParams || []).map((p: any) => ({
+      type: 'public-key',
+      alg: Number(p.alg)
+    })),
+    timeout: Number(obj.timeout) || 60000,
+    attestation: obj.attestation || 'none'
+  };
 
-  // 1. Challenge (Required)
-  if (obj.challenge) {
-    options.challenge = cleanAndFormatBase64(obj.challenge);
-  }
-
-  // 2. RP (Required for Registration)
-  if (obj.rp) {
-    options.rp = {
-      name: obj.rp.name || 'StaffPro',
-      id: (obj.rp.id === 'staffpro_mobile' || !obj.rp.id) && typeof window !== 'undefined' 
-          ? window.location.hostname 
-          : obj.rp.id
+  // Add authenticator selection if provided
+  if (obj.authenticatorSelection) {
+    options.authenticatorSelection = {
+      userVerification: obj.authenticatorSelection.userVerification || 'preferred'
     };
+    if (obj.authenticatorSelection.authenticatorAttachment) {
+      options.authenticatorSelection.authenticatorAttachment = obj.authenticatorSelection.authenticatorAttachment;
+    }
+    if (obj.authenticatorSelection.requireResidentKey !== undefined) {
+      options.authenticatorSelection.requireResidentKey = obj.authenticatorSelection.requireResidentKey;
+    }
   }
 
-  // 3. User (Required for Registration)
-  if (obj.user) {
-    options.user = {
-      id: cleanAndFormatBase64(obj.user.id),
-      name: obj.user.name,
-      displayName: obj.user.displayName || obj.user.name
-    };
-  }
-
-  // 4. pubKeyCredParams (Required for Registration)
-  if (obj.pubKeyCredParams) {
-    options.pubKeyCredParams = obj.pubKeyCredParams.map((p: any) => ({
-      type: p.type || 'public-key',
-      alg: p.alg
-    }));
-  }
-
-  // 5. excludeCredentials / allowCredentials
-  if (obj.excludeCredentials) {
+  // Add excludeCredentials for registration if present
+  if (obj.excludeCredentials && Array.isArray(obj.excludeCredentials) && obj.excludeCredentials.length > 0) {
     options.excludeCredentials = obj.excludeCredentials.map((c: any) => ({
       id: cleanAndFormatBase64(c.id),
-      type: c.type || 'public-key',
+      type: 'public-key',
       transports: c.transports
     }));
   }
-  if (obj.allowCredentials) {
+
+  // Add allowCredentials for authentication if present
+  if (obj.allowCredentials && Array.isArray(obj.allowCredentials) && obj.allowCredentials.length > 0) {
     options.allowCredentials = obj.allowCredentials.map((c: any) => ({
       id: cleanAndFormatBase64(c.id),
-      type: c.type || 'public-key',
+      type: 'public-key',
       transports: c.transports
     }));
   }
 
-  // 6. authenticatorSelection
-  if (obj.authenticatorSelection) {
-    options.authenticatorSelection = { ...obj.authenticatorSelection };
-  }
-
-  // 7. attestation
-  if (obj.attestation) {
-    options.attestation = obj.attestation;
-  }
-
-  // 8. timeout
-  if (obj.timeout) {
-    options.timeout = obj.timeout;
-  }
-
-  // 9. Extensions - Only include standard WebAuthn extensions
+  // Only include standard extensions to avoid "refactor" warnings
   if (obj.extensions) {
     const validExtensions: any = {};
-    const standardExtensions = ['credProps', 'hmacCreateSecret', 'uvm'];
-    for (const key of standardExtensions) {
-      if (obj.extensions[key] !== undefined) {
-        validExtensions[key] = obj.extensions[key];
-      }
-    }
+    if (obj.extensions.credProps !== undefined) validExtensions.credProps = obj.extensions.credProps;
+    if (obj.extensions.hmacCreateSecret !== undefined) validExtensions.hmacCreateSecret = obj.extensions.hmacCreateSecret;
     if (Object.keys(validExtensions).length > 0) {
       options.extensions = validExtensions;
     }
@@ -241,8 +227,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const deviceName = getDeviceName();
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
-      let rawOptions = responseData.publicKey || responseData;
-      let options = prepareWebAuthnOptions(rawOptions);
+      // Smart extraction: find the options object regardless of PHP wrapping
+      const rawOptions = responseData.publicKey || responseData;
+      const options = prepareWebAuthnOptions(rawOptions);
       
       console.log('PASSKEY: Ceremony Options Object (Final Cleaned):', JSON.stringify(options, null, 2));
 
@@ -251,7 +238,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       let credentialResponse;
-      const isRegistration = !!(options.user && options.pubKeyCredParams);
+      // If "user" is present, it's a Registration ceremony (Credential Creation)
+      const isRegistration = !!(options.user && options.user.id);
       
       if (isRegistration) {
         console.log('PASSKEY: Detected Registration Options. Starting registration ceremony...');
@@ -272,20 +260,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('PASSKEY: Error in passkeyLogin flow:', error);
       let errorMessage = error.message || 'Could not sign in with passkey.';
       
-      // Detailed error mapping for troubleshooting
-      if (error.name === 'NotAllowedError') {
-        errorMessage = 'Passkey authentication was cancelled or timed out.';
-      } else if (error.name === 'SecurityError') {
-        errorMessage = `Security Error: The RP ID must match the origin domain (${window.location.hostname}).`;
-      } else if (error.name === 'InvalidStateError') {
-        errorMessage = 'This device is already registered or the passkey is invalid for this request.';
+      // Mapping browser security errors to user-friendly messages
+      if (error.name === 'SecurityError') {
+        errorMessage = `SecurityError: The RP ID must match the origin domain (${window.location.hostname}).`;
+      } else if (error.name === 'NotAllowedError') {
+        errorMessage = 'Permissions Policy block or user cancelled. Ensure you are in a top-level tab.';
       } else if (error.name === 'NotSupportedError') {
-        errorMessage = 'Passkeys are not supported on this browser or device.';
+        errorMessage = 'Passkeys/Biometrics are not supported on this device/browser.';
       }
       
       toast({
         title: 'Authentication Failed',
-        description: `${error.name}: ${errorMessage}`,
+        description: errorMessage,
         variant: 'destructive',
       });
     }
