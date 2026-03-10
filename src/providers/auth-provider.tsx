@@ -29,19 +29,16 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
- * Utility to clean MIME-wrapped binary strings and ensure strict Base64URL encoding.
- * WebAuthn challenge and IDs MUST be Base64URL (no padding, - and _ instead of + and /).
+ * Ensures strict Base64URL encoding (no padding, - and _ instead of + and /).
  */
 function cleanAndFormatBase64(val: any): string {
   if (typeof val !== 'string') return '';
   
   let cleaned = val;
-  // Strip MIME binary headers if present
   if (cleaned.startsWith('=?BINARY?B?')) {
     cleaned = cleaned.replace('=?BINARY?B?', '').replace('?=', '');
   }
   
-  // Convert standard Base64 to Base64URL (required by SimpleWebAuthn)
   return cleaned
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -49,22 +46,19 @@ function cleanAndFormatBase64(val: any): string {
 }
 
 /**
- * Surgically reconstructs the options object to satisfy strict WebAuthn JSON schema.
- * Strips non-standard extensions like 'exts' which trigger library warnings.
+ * Reconstructs a pure WebAuthn options object to satisfy strict JSON schema checks.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
 
-  // Detect if this is an authentication or registration ceremony
   const isRegistration = !!(obj.user && obj.user.id);
 
-  // We construct a brand new object using ONLY standard WebAuthn keys.
-  // This satisfies the @simplewebauthn/browser's strict JSON schema check.
+  // Start with common fields
   const options: any = {
     challenge: cleanAndFormatBase64(obj.challenge),
     rp: {
       name: obj.rp?.name || 'StaffPro',
-      id: obj.rp?.id
+      id: obj.rp?.id, // Using server-provided RP ID directly
     },
     timeout: Number(obj.timeout) || 60000,
   };
@@ -100,7 +94,6 @@ function prepareWebAuthnOptions(obj: any): any {
       }));
     }
   } else {
-    // Authentication specific fields
     if (obj.allowCredentials) {
       options.allowCredentials = (obj.allowCredentials || []).map((c: any) => ({
         id: cleanAndFormatBase64(c.id),
@@ -111,7 +104,7 @@ function prepareWebAuthnOptions(obj: any): any {
     options.userVerification = obj.userVerification || 'preferred';
   }
 
-  // Extensions are stripped unless they are known standards to avoid "refactor" warnings
+  // Extensions are whitelisted to avoid library warnings from non-standard keys like 'exts'
   if (obj.extensions && typeof obj.extensions === 'object') {
     const validExtensions: any = {};
     if (obj.extensions.credProps !== undefined) validExtensions.credProps = obj.extensions.credProps;
@@ -243,10 +236,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const isRegistration = !!(options.user && options.user.id);
       
       if (isRegistration) {
-        console.log('PASSKEY: Detected Registration Options. Starting registration ceremony...');
+        console.log('PASSKEY: Starting registration ceremony...');
         credentialResponse = await startRegistration(options);
       } else {
-        console.log('PASSKEY: Detected Authentication Options. Starting authentication ceremony...');
+        console.log('PASSKEY: Starting authentication ceremony...');
         credentialResponse = await startAuthentication(options);
       }
       
@@ -262,9 +255,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let errorMessage = error.message || 'Could not sign in with passkey.';
       
       if (error.name === 'SecurityError') {
-        errorMessage = `SecurityError: The RP ID must match the origin domain (${window.location.hostname}).`;
+        errorMessage = `SecurityError: The RP ID (${options.rp?.id}) must match the origin domain (${window.location.hostname}).`;
       } else if (error.name === 'NotAllowedError') {
-        errorMessage = 'Permissions Policy block or user cancelled. Ensure you are in a top-level tab (pop-out window).';
+        errorMessage = 'Permissions Policy block or user cancelled. Ensure you are in a top-level tab.';
       } else if (error.name === 'NotSupportedError') {
         errorMessage = 'Passkeys/Biometrics are not supported on this device/browser.';
       }

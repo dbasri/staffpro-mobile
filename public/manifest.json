@@ -4,7 +4,7 @@
   "description": "Secure Content Environment for StaffPro",
   "start_url": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#F5A623",
   "icons": [
