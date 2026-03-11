@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import WebView from '@/components/web-view';
 import { Loader2, LogOut } from 'lucide-react';
@@ -20,12 +20,20 @@ function GlobalLoader() {
 function MainPage() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout, authError, setAuthError } = useAuth();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
+  // Clean up URL parameters after successful authentication to prevent back-button loops
+  useEffect(() => {
+    if (isAuthenticated && isVerifying) {
+      router.replace('/');
+    }
+  }, [isAuthenticated, isVerifying, router]);
+
   useEffect(() => {
     if (isLoggingOut) {
       const timer = setTimeout(() => {
@@ -82,6 +90,7 @@ function MainPage() {
     return <GlobalLoader />;
   }
 
+  // If no URL can be constructed yet, keep showing the loader
   if (url === null) {
       return <GlobalLoader />;
   }
@@ -89,7 +98,7 @@ function MainPage() {
   return (
     <main className="relative h-dvh w-full overflow-hidden">
       <WebView 
-        key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${isVerifying ? 'verify' : 'main'}`} 
+        key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${isVerifying ? 'verify' : 'main'}-${isLoggingOut ? 'logout' : 'active'}`} 
         url={url} 
       />
       

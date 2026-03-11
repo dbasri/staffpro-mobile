@@ -29,24 +29,6 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
- * Ensures strict Base64URL encoding (no padding, - and _ instead of + and /).
- */
-function cleanAndFormatBase64(val: any): string {
-  if (typeof val !== 'string') return '';
-  
-  let cleaned = val;
-  // Strip common MIME binary wrappers if present
-  if (cleaned.startsWith('=?BINARY?B?')) {
-    cleaned = cleaned.replace('=?BINARY?B?', '').replace('?=', '');
-  }
-  
-  return cleaned
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-}
-
-/**
  * Reconstructs a pure WebAuthn options object to satisfy strict library checks.
  */
 function prepareWebAuthnOptions(obj: any): any {
@@ -54,8 +36,14 @@ function prepareWebAuthnOptions(obj: any): any {
 
   const isRegistration = !!(obj.user && obj.user.id);
 
+  // Helper to ensure Base64URL encoding (standard format)
+  const formatB64 = (val: any) => {
+    if (typeof val !== 'string') return '';
+    return val.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  };
+
   const options: any = {
-    challenge: cleanAndFormatBase64(obj.challenge),
+    challenge: formatB64(obj.challenge),
     rp: {
       name: obj.rp?.name || 'StaffPro',
       id: obj.rp?.id,
@@ -65,7 +53,7 @@ function prepareWebAuthnOptions(obj: any): any {
 
   if (isRegistration) {
     options.user = {
-      id: cleanAndFormatBase64(obj.user.id),
+      id: formatB64(obj.user.id),
       name: obj.user.name || '',
       displayName: obj.user.displayName || obj.user.name || ''
     };
@@ -74,29 +62,13 @@ function prepareWebAuthnOptions(obj: any): any {
       alg: Number(p.alg)
     }));
     options.attestation = obj.attestation || 'none';
-    
     if (obj.authenticatorSelection) {
-      options.authenticatorSelection = {
-        userVerification: obj.authenticatorSelection.userVerification || 'preferred',
-        residentKey: obj.authenticatorSelection.residentKey || 'preferred',
-        requireResidentKey: obj.authenticatorSelection.requireResidentKey ?? false
-      };
-      if (obj.authenticatorSelection.authenticatorAttachment) {
-        options.authenticatorSelection.authenticatorAttachment = obj.authenticatorSelection.authenticatorAttachment;
-      }
-    }
-
-    if (obj.excludeCredentials) {
-      options.excludeCredentials = (obj.excludeCredentials || []).map((c: any) => ({
-        id: cleanAndFormatBase64(c.id),
-        type: 'public-key',
-        transports: c.transports
-      }));
+      options.authenticatorSelection = obj.authenticatorSelection;
     }
   } else {
     if (obj.allowCredentials) {
       options.allowCredentials = (obj.allowCredentials || []).map((c: any) => ({
-        id: cleanAndFormatBase64(c.id),
+        id: formatB64(c.id),
         type: 'public-key',
         transports: c.transports
       }));
@@ -104,14 +76,12 @@ function prepareWebAuthnOptions(obj: any): any {
     options.userVerification = obj.userVerification || 'preferred';
   }
 
-  // Only whitelist standard extensions to satisfy library validation
+  // Explicitly ONLY include standard extensions to avoid library "refactor" warnings
   if (obj.extensions && typeof obj.extensions === 'object') {
-    const validExtensions: any = {};
-    if (obj.extensions.credProps !== undefined) validExtensions.credProps = obj.extensions.credProps;
-    if (obj.extensions.hmacCreateSecret !== undefined) validExtensions.hmacCreateSecret = obj.extensions.hmacCreateSecret;
-    if (Object.keys(validExtensions).length > 0) {
-      options.extensions = validExtensions;
-    }
+    const validExts: any = {};
+    if (obj.extensions.credProps !== undefined) validExts.credProps = obj.extensions.credProps;
+    if (obj.extensions.hmacCreateSecret !== undefined) validExts.hmacCreateSecret = obj.extensions.hmacCreateSecret;
+    if (Object.keys(validExts).length > 0) options.extensions = validExts;
   }
 
   return options;
@@ -124,7 +94,6 @@ function getDeviceName(): string {
   if (/Android/.test(ua)) return 'Android Device';
   if (/Macintosh/.test(ua)) return 'Mac';
   if (/Windows/.test(ua)) return 'Windows PC';
-  if (/Linux/.test(ua)) return 'Linux Device';
   return 'Mobile/Web Browser';
 }
 
