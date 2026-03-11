@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 
 interface WebViewProps {
@@ -9,6 +9,11 @@ interface WebViewProps {
 
 function WebView({ url }: WebViewProps) {
   const [isLoading, setIsLoading] = useState(true);
+
+  // Reset loading state when the URL changes
+  useEffect(() => {
+    setIsLoading(true);
+  }, [url]);
 
   const handleLoad = () => {
     setIsLoading(false);

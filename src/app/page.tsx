@@ -88,7 +88,10 @@ function MainPage() {
   
   return (
     <main className="relative h-dvh w-full overflow-hidden">
-      <WebView key={`staffpro-webview-${isVerifying ? 'verify' : 'main'}`} url={url} />
+      <WebView 
+        key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${isVerifying ? 'verify' : 'main'}`} 
+        url={url} 
+      />
       
       {isVerifying && !isAuthenticated && (
         <CodeVerificationOverlay

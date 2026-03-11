@@ -48,14 +48,12 @@ function cleanAndFormatBase64(val: any): string {
 
 /**
  * Reconstructs a pure WebAuthn options object to satisfy strict library checks.
- * Strips non-standard extensions and ensures only spec-compliant keys are sent to the browser.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
 
   const isRegistration = !!(obj.user && obj.user.id);
 
-  // Reconstruct a "Pure" WebAuthn object to avoid "startRegistration() was not called correctly" warnings.
   const options: any = {
     challenge: cleanAndFormatBase64(obj.challenge),
     rp: {
@@ -224,11 +222,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthError(null);
       const deviceName = getDeviceName();
       
-      // 1. Get options from server
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       const rawOptions = responseData.publicKey || responseData;
-      
-      // 2. Prepare/Clean options for the browser to satisfy library requirements
       const options = prepareWebAuthnOptions(rawOptions);
       
       if (!options.challenge) {
@@ -239,14 +234,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const isRegistration = !!(options.user && options.user.id);
       
       if (isRegistration) {
-        console.log('PASSKEY: Starting registration ceremony...');
         credentialResponse = await startRegistration(options);
       } else {
-        console.log('PASSKEY: Starting authentication ceremony...');
         credentialResponse = await startAuthentication(options);
       }
       
-      // 3. Verify assertion/attestation with server
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
