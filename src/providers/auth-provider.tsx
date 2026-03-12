@@ -30,10 +30,9 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
- * Robustly normalizes strings for WebAuthn.
+ * Normalizes strings for WebAuthn.
  * 1. Strips PHP binary wrappers (=?BINARY?B?...?=)
- * 2. Detects and converts 64-char Hex strings to Base64URL
- * 3. Ensures clean Base64URL format for the browser API
+ * 2. Converts the challenge string into a clean Base64URL format for the browser.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return '';
@@ -41,30 +40,23 @@ function normalizeBase64URL(str: string): string {
   // 1. Strip PHP-style BINARY wrappers
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '');
   
-  // 2. Detect 64-character Hex string (32 bytes). 
-  // If hex, convert to binary then to base64url.
-  if (/^[0-9a-fA-F]{64}$/.test(cleanStr)) {
+  // 2. If it was wrapped, it was Base64 encoded by PHP. Decode it to get the raw string (e.g. the Hex).
+  // If it wasn't wrapped, we assume it's the raw string already.
+  let rawString = cleanStr;
+  if (str.startsWith('=?BINARY?B?')) {
     try {
-      const bytes = new Uint8Array(cleanStr.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      return btoa(binary)
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
+      rawString = atob(cleanStr);
     } catch (e) {
-      console.warn('AUTH: Hex conversion failed, falling back to string cleaning.');
+      console.warn('AUTH: Failed to decode PHP binary wrapper.');
     }
   }
 
-  // 3. Standard Base64 cleanup
-  cleanStr = cleanStr.trim().replace(/[^A-Za-z0-9+/_\-=]/g, '');
-  cleanStr = cleanStr.replace(/\+/g, '-').replace(/\//g, '_');
-  cleanStr = cleanStr.replace(/=/g, '');
-
-  return cleanStr;
+  // 3. Convert the raw string (usually a 64-char Hex) into Base64URL for the browser API.
+  // We want the browser to sign the literal characters so they match the server's string comparison.
+  return btoa(rawString)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
 }
 
 /**
