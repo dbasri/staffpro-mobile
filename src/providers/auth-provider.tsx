@@ -31,7 +31,8 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
  * Robustly normalizes strings for WebAuthn.
- * Specifically handles the PHP-style '=?BINARY?B?...?=' wrapper if present.
+ * Specifically handles the PHP-style '=?BINARY?B?...?=' wrapper if present
+ * and ensures the result is a clean Base64URL string (no padding, -, _).
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return '';
@@ -46,6 +47,7 @@ function normalizeBase64URL(str: string): string {
   }
 
   // Convert standard Base64 to Base64URL and remove padding
+  // This is what prevents the 'atob' InvalidCharacterError in the library
   return cleanStr
     .replace(/\+/g, '-')
     .replace(/\//g, '_')

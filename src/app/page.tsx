@@ -29,10 +29,10 @@ function MainPage() {
   
   // Clean up URL parameters after successful authentication to prevent back-button loops
   useEffect(() => {
-    if (isAuthenticated && isVerifying) {
+    if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
       router.replace('/');
     }
-  }, [isAuthenticated, isVerifying, router]);
+  }, [isAuthenticated, isVerifying, searchParams, router]);
 
   useEffect(() => {
     if (isLoggingOut) {
@@ -97,7 +97,7 @@ function MainPage() {
   return (
     <main className="relative h-dvh w-full overflow-hidden">
       <WebView 
-        key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${isVerifying ? 'verify' : 'main'}-${isLoggingOut ? 'logout' : 'active'}`} 
+        key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${isVerifying ? 'verify' : 'main'}-${isLoggingOut ? 'logout' : 'active'}-${isAuthenticated ? user?.session : 'no-session'}`} 
         url={url} 
       />
       

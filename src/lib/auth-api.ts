@@ -13,13 +13,12 @@ export const AuthApi = {
   async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
     console.log(`PASSKEY: Starting options request for ${email}`);
-    console.log(`PASSKEY: App Origin is: ${origin}`);
-    console.log(`PASSKEY: Requesting from: ${staffproBaseUrl}?passkey=options`);
-
+    
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
         method: 'POST',
         mode: 'cors',
+        credentials: 'include', // CRITICAL: Sends session cookies (PHPSESSID) for persistence
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
@@ -33,20 +32,14 @@ export const AuthApi = {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`PASSKEY: Server returned error status ${response.status}`);
-        console.error(`PASSKEY: Server error body:`, errorText);
         throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
       }
 
       const options = await response.json();
-      console.log('PASSKEY: Successfully received options JSON from server:', options);
+      console.log('PASSKEY: Successfully received options JSON from server');
       return options;
     } catch (error: any) {
-      console.error('PASSKEY: Fetch operation failed.', error);
-      
-      if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
-        throw new Error(`Network error or CORS block. Ensure server at ${staffproBaseUrl} returns 'Access-Control-Allow-Origin: ${origin}' in the POST response.`);
-      }
+      console.error('PASSKEY: Options fetch failed.', error);
       throw error;
     }
   },
@@ -63,6 +56,7 @@ export const AuthApi = {
       const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
         method: 'POST',
         mode: 'cors',
+        credentials: 'include', // CRITICAL: Sends session cookies to identify the challenge "instance"
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
@@ -77,18 +71,14 @@ export const AuthApi = {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`PASSKEY: Verification endpoint returned error ${response.status}`);
         throw new Error(`Verification error (${response.status}): ${errorText || 'Check server logs'}`);
       }
 
       const result = await response.json();
-      console.log('PASSKEY: Verification result JSON:', result);
+      console.log('PASSKEY: Verification result received');
       return result;
     } catch (error: any) {
-      console.error('PASSKEY: Fetch operation failed during verification.', error);
-      if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
-        throw new Error('Network error or CORS block during verification response.');
-      }
+      console.error('PASSKEY: Verification fetch failed.', error);
       throw error;
     }
   },
