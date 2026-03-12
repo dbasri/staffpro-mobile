@@ -32,7 +32,8 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 /**
  * Normalizes strings for WebAuthn.
  * 1. Strips PHP binary wrappers (=?BINARY?B?...?=)
- * 2. Converts the challenge string into a clean Base64URL format for the browser.
+ * 2. Treats the resulting payload as literal bytes to match server-side string comparisons.
+ * 3. Converts into a clean Base64URL format for the browser API.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return '';
@@ -40,23 +41,28 @@ function normalizeBase64URL(str: string): string {
   // 1. Strip PHP-style BINARY wrappers
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '');
   
-  // 2. If it was wrapped, it was Base64 encoded by PHP. Decode it to get the raw string (e.g. the Hex).
-  // If it wasn't wrapped, we assume it's the raw string already.
-  let rawString = cleanStr;
+  // 2. If it was wrapped, it was Base64 encoded by PHP. Decode it to get the raw bytes.
+  let rawBytes = cleanStr;
   if (str.startsWith('=?BINARY?B?')) {
     try {
-      rawString = atob(cleanStr);
+      // PHP's base64_encode output might need standardizing for atob
+      rawBytes = atob(cleanStr);
     } catch (e) {
-      console.warn('AUTH: Failed to decode PHP binary wrapper.');
+      console.warn('AUTH: Failed to decode PHP binary wrapper. Using raw string.');
     }
   }
 
-  // 3. Convert the raw string (usually a 64-char Hex) into Base64URL for the browser API.
-  // We want the browser to sign the literal characters so they match the server's string comparison.
-  return btoa(rawString)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
+  // 3. Convert the raw bytes (e.g. the 64-character Hex string) into Base64URL.
+  // We sign the literal characters so they match the server's binary string comparison.
+  try {
+    return btoa(rawBytes)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  } catch (e) {
+    console.error('AUTH: Normalization failed', e);
+    return '';
+  }
 }
 
 /**
