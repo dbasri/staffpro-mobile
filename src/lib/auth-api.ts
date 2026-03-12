@@ -8,17 +8,15 @@ import type { UserSession } from '@/types/session';
 export const AuthApi = {
   /**
    * Fetches the WebAuthn authentication options (challenge) from the server.
-   * Server should respond with: header('Content-Type: application/json'); echo json_encode($options); exit;
    */
   async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
-    console.log(`PASSKEY: Starting options request for ${email}`);
     
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
         method: 'POST',
         mode: 'cors',
-        credentials: 'include', // CRITICAL: Sends session cookies (PHPSESSID) for persistence
+        credentials: 'include', // CRITICAL: Sends session cookies (PHPSESSID)
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
@@ -35,9 +33,7 @@ export const AuthApi = {
         throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
       }
 
-      const options = await response.json();
-      console.log('PASSKEY: Successfully received options JSON from server');
-      return options;
+      return await response.json();
     } catch (error: any) {
       console.error('PASSKEY: Options fetch failed.', error);
       throw error;
@@ -46,11 +42,9 @@ export const AuthApi = {
 
   /**
    * Sends the signed passkey assertion back to the server for verification.
-   * Server should respond with: header('Content-Type: application/json'); echo json_encode($userSession); exit;
    */
   async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
-    console.log(`PASSKEY: Sending assertion for ${email} to verification endpoint.`);
 
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
@@ -74,9 +68,7 @@ export const AuthApi = {
         throw new Error(`Verification error (${response.status}): ${errorText || 'Check server logs'}`);
       }
 
-      const result = await response.json();
-      console.log('PASSKEY: Verification result received');
-      return result;
+      return await response.json();
     } catch (error: any) {
       console.error('PASSKEY: Verification fetch failed.', error);
       throw error;

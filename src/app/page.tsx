@@ -71,14 +71,14 @@ function MainPage() {
     const params = new URLSearchParams({
       session: user.session,
       email: user.email,
-      origin: window.location.origin,
+      origin: typeof window !== 'undefined' ? window.location.origin : '',
     });
     url = `${staffproBaseUrl}?${params.toString()}`;
   } else if (isVerifying && emailForVerification) {
     const params = new URLSearchParams({
       verification: 'true',
       email: emailForVerification,
-      origin: window.location.origin,
+      origin: typeof window !== 'undefined' ? window.location.origin : '',
     });
     if (verificationCode) {
       params.append('code', verificationCode);

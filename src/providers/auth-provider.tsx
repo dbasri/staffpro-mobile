@@ -38,16 +38,13 @@ function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return '';
   
   let cleanStr = str.trim();
-  const binaryPrefix = '=?BINARY?B?';
-  const binarySuffix = '?=';
   
-  // Strip non-standard BINARY wrapper if found
-  if (cleanStr.startsWith(binaryPrefix) && cleanStr.endsWith(binarySuffix)) {
-    cleanStr = cleanStr.substring(binaryPrefix.length, cleanStr.length - binarySuffix.length);
-  }
+  // Aggressively strip PHP-style BINARY wrappers
+  // We use regex to ensure we catch variations and multiple occurrences if nested
+  cleanStr = cleanStr.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '');
 
   // Convert standard Base64 to Base64URL and remove padding
-  // This is what prevents the 'atob' InvalidCharacterError in the library
+  // This is mandatory for navigator.credentials to accept the string
   return cleanStr
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
