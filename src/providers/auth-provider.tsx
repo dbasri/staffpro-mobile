@@ -30,13 +30,23 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
- * Ensures a string is correctly formatted as Base64URL for the browser SDK.
- * Removes whitespace, handles standard Base64 conversion, and strips padding.
+ * Robustly normalizes strings for WebAuthn.
+ * Specifically handles the PHP-style '=?BINARY?B?...?=' wrapper if present.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return '';
-  return str
-    .trim()
+  
+  let cleanStr = str.trim();
+  const binaryPrefix = '=?BINARY?B?';
+  const binarySuffix = '?=';
+  
+  // Strip non-standard BINARY wrapper if found
+  if (cleanStr.startsWith(binaryPrefix) && cleanStr.endsWith(binarySuffix)) {
+    cleanStr = cleanStr.substring(binaryPrefix.length, cleanStr.length - binarySuffix.length);
+  }
+
+  // Convert standard Base64 to Base64URL and remove padding
+  return cleanStr
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=/g, '');
@@ -44,6 +54,7 @@ function normalizeBase64URL(str: string): string {
 
 /**
  * Surgically reconstructs the options object to satisfy strict WebAuthn standards.
+ * Strips non-standard extensions and ensures Base64URL compliance.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
