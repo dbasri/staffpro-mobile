@@ -3,7 +3,7 @@ import type { UserSession } from '@/types/session';
 
 /**
  * Service to handle direct POST communications with the StaffPro authentication endpoints.
- * These methods use the fetch API and expect raw JSON responses from the server.
+ * These methods use the fetch API and include credentials for session persistence.
  */
 export const AuthApi = {
   /**
