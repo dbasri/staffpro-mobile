@@ -40,8 +40,6 @@ function normalizeBase64URL(str: string): string {
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '');
   
   // 2. Remove any remaining non-base64 characters that might cause atob errors
-  // Standard Base64: A-Za-z0-9+/=
-  // Base64URL: A-Za-z0-9-_
   cleanStr = cleanStr.trim().replace(/[^A-Za-z0-9+/_\-=]/g, '');
 
   // 3. Convert standard Base64 (+, /) to Base64URL (-, _)
@@ -205,7 +203,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       const rawOptions = responseData.publicKey || responseData;
       
-      console.log('PASSKEY: Normalizing options for browser...');
       const options = prepareWebAuthnOptions(rawOptions);
       
       if (!options.challenge) {
@@ -216,14 +213,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const isRegistration = !!(options.user && options.user.id);
       
       if (isRegistration) {
-        console.log('PASSKEY: Starting registration ceremony...');
         credentialResponse = await startRegistration(options);
       } else {
-        console.log('PASSKEY: Starting authentication ceremony...');
         credentialResponse = await startAuthentication(options);
       }
       
-      console.log('PASSKEY: Ceremony complete. Verifying with server...');
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
@@ -233,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(result.purpose || 'Passkey verification failed.');
       }
     } catch (error: any) {
-      console.error('PASSKEY: Error in passkeyLogin flow:', error);
+      console.error('PASSKEY: Error:', error);
       let errorMessage = error.message || 'Could not sign in with passkey.';
       
       if (error.name === 'SecurityError') {

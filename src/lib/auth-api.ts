@@ -3,7 +3,6 @@ import type { UserSession } from '@/types/session';
 
 /**
  * Service to handle direct POST communications with the StaffPro authentication endpoints.
- * These methods use the fetch API and include credentials for session persistence.
  */
 export const AuthApi = {
   /**
@@ -16,7 +15,7 @@ export const AuthApi = {
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
         method: 'POST',
         mode: 'cors',
-        credentials: 'include', // CRITICAL: Sends session cookies (PHPSESSID) for Ajax persistence
+        credentials: 'include', // Sends PHPSESSID for session persistence
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
@@ -50,7 +49,7 @@ export const AuthApi = {
       const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
         method: 'POST',
         mode: 'cors',
-        credentials: 'include', // CRITICAL: Sends session cookies to identify the challenge "instance"
+        credentials: 'include',
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'

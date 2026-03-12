@@ -31,7 +31,6 @@ function MainPage() {
   // to prevent re-triggering verification or "back-button" email resends.
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
-      console.log('AUTH: Cleaning up verification parameters from browser history.');
       router.replace('/');
     }
   }, [isAuthenticated, isVerifying, searchParams, router]);
@@ -77,7 +76,6 @@ function MainPage() {
     });
     url = `${staffproBaseUrl}?${params.toString()}`;
   } else if (isVerifying && emailForVerification) {
-    // Only show verification if NOT already authenticated
     if (!isAuthenticated) {
       const params = new URLSearchParams({
         verification: 'true',
@@ -88,8 +86,6 @@ function MainPage() {
         params.append('code', verificationCode);
       }
       url = `${staffproBaseUrl}?${params.toString()}`;
-    } else {
-      url = null; // Should be handled by the router.replace cleanup
     }
   }
 
@@ -105,7 +101,7 @@ function MainPage() {
     <main className="relative h-dvh w-full overflow-hidden">
       {url && (
         <WebView 
-          key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${isVerifying ? 'verify' : 'main'}-${isLoggingOut ? 'logout' : 'active'}-${isAuthenticated ? user?.session : 'no-session'}`} 
+          key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${isVerifying ? 'verify' : 'main'}-${isLoggingOut ? 'logout' : 'active'}`} 
           url={url} 
         />
       )}
