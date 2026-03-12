@@ -97,7 +97,6 @@ function MainPage() {
   
   return (
     <main className="relative h-dvh w-full overflow-hidden">
-      {/* We use a complex key to ensure the WebView remounts correctly when auth status changes */}
       <WebView 
         key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${isVerifying ? 'verify' : 'main'}-${isLoggingOut ? 'logout' : 'active'}-${isAuthenticated ? user?.session : 'no-session'}`} 
         url={url} 

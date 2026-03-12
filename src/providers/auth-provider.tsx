@@ -55,20 +55,18 @@ function normalizeBase64URL(str: string): string {
 
 /**
  * Surgically reconstructs the options object to satisfy strict WebAuthn standards.
- * This removes non-standard fields like 'exts' and ensures all IDs are correctly formatted.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
 
   const isRegistration = !!(obj.user && obj.user.id);
 
-  // Reconstruct a fresh object to ensure no "illegal" keys flow to the browser SDK
   const options: any = {
     challenge: normalizeBase64URL(obj.challenge),
     timeout: Number(obj.timeout) || 60000,
     rp: {
       name: obj.rp?.name || 'StaffPro',
-      id: obj.rp?.id, // Allow server-provided ID for production testing
+      id: obj.rp?.id, 
     },
   };
 
@@ -141,7 +139,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Use refs to avoid re-running effects when callbacks change
   const logoutRef = useRef(logout);
   const loginRef = useRef(login);
 
@@ -150,7 +147,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loginRef.current = login;
   }, [logout, login]);
 
-  // Listen for login/logout messages from the WebView iframe
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
@@ -188,7 +184,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('message', handleServerMessage);
   }, []);
 
-  // Load session from storage on mount
   useEffect(() => {
     try {
       const sessionString = localStorage.getItem(SESSION_STORAGE_KEY);
@@ -207,14 +202,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setAuthError(null);
       const deviceName = getDeviceName();
-      
-      // 1. Get Options from Server
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
-      
-      // The server might return { publicKey: { ... } } or the options directly
       const rawOptions = responseData.publicKey || responseData;
-      
-      // 2. Prepare options for the browser
       const options = prepareWebAuthnOptions(rawOptions);
       
       if (!options.challenge) {
@@ -224,14 +213,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let credentialResponse;
       const isRegistration = !!(options.user && options.user.id);
       
-      // 3. Trigger Browser Ceremony
       if (isRegistration) {
         credentialResponse = await startRegistration(options);
       } else {
         credentialResponse = await startAuthentication(options);
       }
       
-      // 4. Verify with Server
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
@@ -244,7 +231,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('PASSKEY: Error in passkeyLogin flow:', error);
       let errorMessage = error.message || 'Could not sign in with passkey.';
       
-      // Map common WebAuthn errors to user-friendly messages
       if (error.name === 'SecurityError') {
         errorMessage = `SecurityError: The RP ID must match the origin domain (${window.location.hostname}).`;
       } else if (error.name === 'NotAllowedError') {
