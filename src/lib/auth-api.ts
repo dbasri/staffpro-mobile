@@ -16,7 +16,7 @@ export const AuthApi = {
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
         method: 'POST',
         mode: 'cors',
-        credentials: 'include', // CRITICAL: Sends session cookies (PHPSESSID)
+        credentials: 'include', // CRITICAL: Sends session cookies (PHPSESSID) for Ajax persistence
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'

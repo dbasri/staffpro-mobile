@@ -31,20 +31,22 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
  * Robustly normalizes strings for WebAuthn.
- * Specifically handles the PHP-style '=?BINARY?B?...?=' wrapper if present
- * and ensures the result is a clean Base64URL string (no padding, -, _).
+ * Handles the PHP-style '=?BINARY?B?...?=' wrapper and ensures Base64URL compliance.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return '';
   
   let cleanStr = str.trim();
   
-  // Aggressively strip PHP-style BINARY wrappers
-  // We use regex to ensure we catch variations and multiple occurrences if nested
+  // Aggressively strip PHP-style BINARY wrappers using regex
+  // This handles the =?BINARY?B? prefix and ?= suffix
   cleanStr = cleanStr.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '');
+  
+  // Extra safety: remove any remaining ?= patterns that might be nested or trailing
+  cleanStr = cleanStr.replace(/\?=/g, '');
 
-  // Convert standard Base64 to Base64URL and remove padding
-  // This is mandatory for navigator.credentials to accept the string
+  // Convert standard Base64 to Base64URL and remove standard padding (=)
+  // This is required for the browser's navigator.credentials API
   return cleanStr
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -53,7 +55,6 @@ function normalizeBase64URL(str: string): string {
 
 /**
  * Surgically reconstructs the options object to satisfy strict WebAuthn standards.
- * Strips non-standard extensions and ensures Base64URL compliance.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -238,7 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (error.name === 'NotSupportedError') {
         errorMessage = 'Passkeys/Biometrics are not supported on this device/browser.';
       } else if (error.name === 'InvalidCharacterError') {
-        errorMessage = 'Encoding Error: The server returned invalid Base64 data.';
+        errorMessage = 'Encoding Error: The server returned invalid Base64 data (atob failed).';
       }
       
       toast({
