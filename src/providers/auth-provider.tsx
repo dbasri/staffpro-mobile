@@ -12,6 +12,7 @@ import type { UserSession } from '@/types/session';
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
 import { AuthApi } from '@/lib/auth-api';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
   user: UserSession | null;
@@ -30,16 +31,19 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
  * Ensures a string is correctly formatted as Base64URL for the browser SDK.
+ * Removes whitespace, handles standard Base64 conversion, and strips padding.
  */
-function toBase64URL(str: string): string {
-  if (!str) return '';
-  // Convert standard Base64 to Base64URL
-  return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+function normalizeBase64URL(str: string): string {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .trim()
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
 }
 
 /**
- * Reconstructs a pure WebAuthn options object to satisfy strict library checks.
- * We prioritize strings as the library handles binary conversion internally.
+ * Surgically reconstructs the options object to satisfy strict WebAuthn standards.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -47,7 +51,7 @@ function prepareWebAuthnOptions(obj: any): any {
   const isRegistration = !!(obj.user && obj.user.id);
 
   const options: any = {
-    challenge: toBase64URL(obj.challenge),
+    challenge: normalizeBase64URL(obj.challenge),
     timeout: Number(obj.timeout) || 60000,
     rp: {
       name: obj.rp?.name || 'StaffPro',
@@ -57,7 +61,7 @@ function prepareWebAuthnOptions(obj: any): any {
 
   if (isRegistration) {
     options.user = {
-      id: toBase64URL(obj.user.id),
+      id: normalizeBase64URL(obj.user.id),
       name: obj.user.name || '',
       displayName: obj.user.displayName || obj.user.name || ''
     };
@@ -72,20 +76,12 @@ function prepareWebAuthnOptions(obj: any): any {
   } else {
     if (obj.allowCredentials) {
       options.allowCredentials = (obj.allowCredentials || []).map((c: any) => ({
-        id: toBase64URL(c.id),
+        id: normalizeBase64URL(c.id),
         type: 'public-key',
         transports: c.transports
       }));
     }
     options.userVerification = obj.userVerification || 'preferred';
-  }
-
-  // Whitelist standard extensions only
-  if (obj.extensions && typeof obj.extensions === 'object') {
-    const validExts: any = {};
-    if (obj.extensions.credProps !== undefined) validExts.credProps = obj.extensions.credProps;
-    if (obj.extensions.hmacCreateSecret !== undefined) validExts.hmacCreateSecret = obj.extensions.hmacCreateSecret;
-    if (Object.keys(validExts).length > 0) options.extensions = validExts;
   }
 
   return options;
@@ -106,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const { toast } = useToast();
+  const router = useRouter();
   const isAuthenticated = !!user;
 
   const login = useCallback((sessionData: UserSession) => {
@@ -216,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (result.status === 'success') {
         login({ ...result, method: 'passkey' });
+        router.replace('/');
       } else {
         throw new Error(result.purpose || 'Passkey verification failed.');
       }
@@ -229,6 +227,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         errorMessage = 'Permissions Policy block or user cancelled. Ensure you are in a top-level tab.';
       } else if (error.name === 'NotSupportedError') {
         errorMessage = 'Passkeys/Biometrics are not supported on this device/browser.';
+      } else if (error.name === 'InvalidCharacterError') {
+        errorMessage = 'Encoding Error: The server returned invalid Base64 data.';
       }
       
       toast({
@@ -237,7 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         variant: 'destructive',
       });
     }
-  }, [login, toast]);
+  }, [login, toast, router]);
 
   return (
     <AuthContext.Provider

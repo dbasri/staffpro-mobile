@@ -90,7 +90,6 @@ function MainPage() {
     return <GlobalLoader />;
   }
 
-  // If no URL can be constructed yet, keep showing the loader
   if (url === null) {
       return <GlobalLoader />;
   }
