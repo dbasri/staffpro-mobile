@@ -30,22 +30,33 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
- * Robustly normalizes strings for WebAuthn by stripping PHP binary wrappers
- * and ensuring clean Base64URL format for the browser API.
+ * Robustly normalizes strings for WebAuthn.
+ * 1. Strips PHP binary wrappers (=?BINARY?B?...?=)
+ * 2. Detects and converts Hex strings to Base64URL
+ * 3. Ensures clean Base64URL format for the browser API
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return '';
   
-  // 1. Strip PHP-style BINARY wrappers: =?BINARY?B?<payload>?= or =?BINARY?B?<payload>
+  // 1. Strip PHP-style BINARY wrappers
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '');
   
-  // 2. Remove any remaining non-base64 characters that might cause atob errors
-  cleanStr = cleanStr.trim().replace(/[^A-Za-z0-9+/_\-=]/g, '');
+  // 2. Detect Hex (64 chars of 0-9a-f). If hex, convert to base64url.
+  if (/^[0-9a-fA-F]{64}$/.test(cleanStr)) {
+    const bytes = new Uint8Array(cleanStr.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  }
 
-  // 3. Convert standard Base64 (+, /) to Base64URL (-, _)
+  // 3. Remove non-base64 characters and convert to Base64URL
+  cleanStr = cleanStr.trim().replace(/[^A-Za-z0-9+/_\-=]/g, '');
   cleanStr = cleanStr.replace(/\+/g, '-').replace(/\//g, '_');
-  
-  // 4. Remove all padding (=) as required by WebAuthn Base64URL spec
   cleanStr = cleanStr.replace(/=/g, '');
 
   return cleanStr;
