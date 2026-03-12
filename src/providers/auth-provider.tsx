@@ -30,31 +30,28 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
- * Robustly normalizes strings for WebAuthn.
- * Handles the PHP-style '=?BINARY?B?...?=' wrapper and ensures Base64URL compliance.
+ * Robustly normalizes strings for WebAuthn by stripping PHP binary wrappers
+ * and ensuring clean Base64URL format for the browser API.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return '';
   
   let cleanStr = str.trim();
   
-  // Aggressively strip PHP-style BINARY wrappers using regex
-  // This handles the =?BINARY?B? prefix and any potential ?= or =?= suffix
-  cleanStr = cleanStr.replace(/^=\?BINARY\?B\?/, '').replace(/\??=$/, '');
+  // 1. Strip PHP-style BINARY wrappers: =?BINARY?B?<payload>?= or =?BINARY?B?<payload>
+  cleanStr = cleanStr.replace(/^=\?BINARY\?B\?/, '').replace(/(\?|=)+$/, '');
   
-  // Extra safety: remove any remaining ?= patterns that might be nested or trailing
-  cleanStr = cleanStr.replace(/\?=/g, '');
+  // 2. Convert standard Base64 (+, /) to Base64URL (-, _)
+  cleanStr = cleanStr.replace(/\+/g, '-').replace(/\//g, '_');
+  
+  // 3. Remove all padding (=) as required by WebAuthn Base64URL spec
+  cleanStr = cleanStr.replace(/=/g, '');
 
-  // Convert standard Base64 to Base64URL and remove standard padding (=)
-  // This is required for the browser's navigator.credentials API
-  return cleanStr
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
+  return cleanStr;
 }
 
 /**
- * Surgically reconstructs the options object to satisfy strict WebAuthn standards.
+ * Reconstructs the options object to satisfy strict WebAuthn standards.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -243,7 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (error.name === 'NotSupportedError') {
         errorMessage = 'Passkeys/Biometrics are not supported on this device/browser.';
       } else if (error.name === 'InvalidCharacterError') {
-        errorMessage = 'Encoding Error: Failed to prepare binary challenge (atob/Base64 mismatch).';
+        errorMessage = 'Encoding Error: Failed to prepare binary challenge (atob/Base64 mismatch). Ensure server binary wrappers are stripped.';
       }
       
       toast({

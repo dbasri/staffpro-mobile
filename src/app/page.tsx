@@ -27,11 +27,11 @@ function MainPage() {
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
-  // Clean up URL parameters after successful authentication to prevent back-button loops
+  // Clean up URL parameters immediately after successful authentication 
+  // to prevent re-triggering verification or "back-button" email resends.
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
-      // Force history cleanup to prevent re-triggering verification on back button
-      console.log('AUTH: Cleaning up verification parameters from history.');
+      console.log('AUTH: Cleaning up verification parameters from browser history.');
       router.replace('/');
     }
   }, [isAuthenticated, isVerifying, searchParams, router]);
@@ -77,31 +77,38 @@ function MainPage() {
     });
     url = `${staffproBaseUrl}?${params.toString()}`;
   } else if (isVerifying && emailForVerification) {
-    const params = new URLSearchParams({
-      verification: 'true',
-      email: emailForVerification,
-      origin: typeof window !== 'undefined' ? window.location.origin : '',
-    });
-    if (verificationCode) {
-      params.append('code', verificationCode);
+    // Only show verification if NOT already authenticated
+    if (!isAuthenticated) {
+      const params = new URLSearchParams({
+        verification: 'true',
+        email: emailForVerification,
+        origin: typeof window !== 'undefined' ? window.location.origin : '',
+      });
+      if (verificationCode) {
+        params.append('code', verificationCode);
+      }
+      url = `${staffproBaseUrl}?${params.toString()}`;
+    } else {
+      url = null; // Should be handled by the router.replace cleanup
     }
-    url = `${staffproBaseUrl}?${params.toString()}`;
   }
 
   if (isAuthLoading) {
     return <GlobalLoader />;
   }
 
-  if (url === null) {
+  if (url === null && !isAuthenticated) {
       return <GlobalLoader />;
   }
   
   return (
     <main className="relative h-dvh w-full overflow-hidden">
-      <WebView 
-        key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${isVerifying ? 'verify' : 'main'}-${isLoggingOut ? 'logout' : 'active'}-${isAuthenticated ? user?.session : 'no-session'}`} 
-        url={url} 
-      />
+      {url && (
+        <WebView 
+          key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${isVerifying ? 'verify' : 'main'}-${isLoggingOut ? 'logout' : 'active'}-${isAuthenticated ? user?.session : 'no-session'}`} 
+          url={url} 
+        />
+      )}
       
       {isVerifying && !isAuthenticated && (
         <CodeVerificationOverlay
