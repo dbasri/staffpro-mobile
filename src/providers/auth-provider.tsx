@@ -36,15 +36,18 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return '';
   
-  let cleanStr = str.trim();
-  
   // 1. Strip PHP-style BINARY wrappers: =?BINARY?B?<payload>?= or =?BINARY?B?<payload>
-  cleanStr = cleanStr.replace(/^=\?BINARY\?B\?/, '').replace(/(\?|=)+$/, '');
+  let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '');
   
-  // 2. Convert standard Base64 (+, /) to Base64URL (-, _)
+  // 2. Remove any remaining non-base64 characters that might cause atob errors
+  // Standard Base64: A-Za-z0-9+/=
+  // Base64URL: A-Za-z0-9-_
+  cleanStr = cleanStr.trim().replace(/[^A-Za-z0-9+/_\-=]/g, '');
+
+  // 3. Convert standard Base64 (+, /) to Base64URL (-, _)
   cleanStr = cleanStr.replace(/\+/g, '-').replace(/\//g, '_');
   
-  // 3. Remove all padding (=) as required by WebAuthn Base64URL spec
+  // 4. Remove all padding (=) as required by WebAuthn Base64URL spec
   cleanStr = cleanStr.replace(/=/g, '');
 
   return cleanStr;
@@ -240,7 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (error.name === 'NotSupportedError') {
         errorMessage = 'Passkeys/Biometrics are not supported on this device/browser.';
       } else if (error.name === 'InvalidCharacterError') {
-        errorMessage = 'Encoding Error: Failed to prepare binary challenge (atob/Base64 mismatch). Ensure server binary wrappers are stripped.';
+        errorMessage = 'Encoding Error (atob): Server sent invalid characters. Binary markers were detected and stripped, but the payload may still be malformed.';
       }
       
       toast({
