@@ -29,31 +29,35 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
+ * Ensures a string is correctly formatted as Base64URL for the browser SDK.
+ */
+function toBase64URL(str: string): string {
+  if (!str) return '';
+  // Convert standard Base64 to Base64URL
+  return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+/**
  * Reconstructs a pure WebAuthn options object to satisfy strict library checks.
+ * We prioritize strings as the library handles binary conversion internally.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
 
   const isRegistration = !!(obj.user && obj.user.id);
 
-  // Helper to ensure Base64URL encoding (standard format)
-  const formatB64 = (val: any) => {
-    if (typeof val !== 'string') return '';
-    return val.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  };
-
   const options: any = {
-    challenge: formatB64(obj.challenge),
+    challenge: toBase64URL(obj.challenge),
+    timeout: Number(obj.timeout) || 60000,
     rp: {
       name: obj.rp?.name || 'StaffPro',
       id: obj.rp?.id,
     },
-    timeout: Number(obj.timeout) || 60000,
   };
 
   if (isRegistration) {
     options.user = {
-      id: formatB64(obj.user.id),
+      id: toBase64URL(obj.user.id),
       name: obj.user.name || '',
       displayName: obj.user.displayName || obj.user.name || ''
     };
@@ -68,7 +72,7 @@ function prepareWebAuthnOptions(obj: any): any {
   } else {
     if (obj.allowCredentials) {
       options.allowCredentials = (obj.allowCredentials || []).map((c: any) => ({
-        id: formatB64(c.id),
+        id: toBase64URL(c.id),
         type: 'public-key',
         transports: c.transports
       }));
@@ -76,7 +80,7 @@ function prepareWebAuthnOptions(obj: any): any {
     options.userVerification = obj.userVerification || 'preferred';
   }
 
-  // Explicitly ONLY include standard extensions to avoid library "refactor" warnings
+  // Whitelist standard extensions only
   if (obj.extensions && typeof obj.extensions === 'object') {
     const validExts: any = {};
     if (obj.extensions.credProps !== undefined) validExts.credProps = obj.extensions.credProps;

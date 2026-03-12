@@ -12,7 +12,9 @@ function WebView({ url }: WebViewProps) {
 
   // Reset loading state when the URL changes to ensure loader shows during transitions
   useEffect(() => {
-    setIsLoading(true);
+    if (url) {
+      setIsLoading(true);
+    }
   }, [url]);
 
   const handleLoad = () => {
