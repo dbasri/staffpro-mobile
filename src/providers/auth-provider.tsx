@@ -39,8 +39,8 @@ function normalizeBase64URL(str: string): string {
   let cleanStr = str.trim();
   
   // Aggressively strip PHP-style BINARY wrappers using regex
-  // This handles the =?BINARY?B? prefix and ?= suffix
-  cleanStr = cleanStr.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '');
+  // This handles the =?BINARY?B? prefix and any potential ?= or =?= suffix
+  cleanStr = cleanStr.replace(/^=\?BINARY\?B\?/, '').replace(/\??=$/, '');
   
   // Extra safety: remove any remaining ?= patterns that might be nested or trailing
   cleanStr = cleanStr.replace(/\?=/g, '');
@@ -204,6 +204,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const deviceName = getDeviceName();
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       const rawOptions = responseData.publicKey || responseData;
+      
+      console.log('PASSKEY: Normalizing options for browser...');
       const options = prepareWebAuthnOptions(rawOptions);
       
       if (!options.challenge) {
@@ -214,11 +216,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const isRegistration = !!(options.user && options.user.id);
       
       if (isRegistration) {
+        console.log('PASSKEY: Starting registration ceremony...');
         credentialResponse = await startRegistration(options);
       } else {
+        console.log('PASSKEY: Starting authentication ceremony...');
         credentialResponse = await startAuthentication(options);
       }
       
+      console.log('PASSKEY: Ceremony complete. Verifying with server...');
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
@@ -238,7 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (error.name === 'NotSupportedError') {
         errorMessage = 'Passkeys/Biometrics are not supported on this device/browser.';
       } else if (error.name === 'InvalidCharacterError') {
-        errorMessage = 'Encoding Error: The server returned invalid Base64 data (atob failed).';
+        errorMessage = 'Encoding Error: Failed to prepare binary challenge (atob/Base64 mismatch).';
       }
       
       toast({

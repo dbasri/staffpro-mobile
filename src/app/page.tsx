@@ -31,6 +31,7 @@ function MainPage() {
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
       // Force history cleanup to prevent re-triggering verification on back button
+      console.log('AUTH: Cleaning up verification parameters from history.');
       router.replace('/');
     }
   }, [isAuthenticated, isVerifying, searchParams, router]);
