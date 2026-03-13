@@ -55,14 +55,12 @@ function normalizeBase64URL(str: string): string {
 
   // 3. Fallback for PHP-wrapped Base64 or standard Base64
   try {
-    // If it looks like base64, we need to ensure it's URL safe
     const decoded = atob(cleanStr.replace(/-/g, '+').replace(/_/g, '/'));
     return btoa(decoded)
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=/g, '');
   } catch (e) {
-    // If not base64, treat as raw bytes if possible
     try {
       return btoa(cleanStr)
         .replace(/\+/g, '-')
