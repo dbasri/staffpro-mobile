@@ -39,7 +39,7 @@ function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return '';
   
   // 1. Strip PHP-style BINARY wrappers
-  let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '');
+  let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
   
   // 2. Detect if it's a 64-character hex string (representing 32 bytes)
   if (/^[0-9a-fA-F]{64}$/.test(cleanStr)) {
@@ -53,25 +53,26 @@ function normalizeBase64URL(str: string): string {
       .replace(/=/g, '');
   }
 
-  // 3. Fallback for PHP-wrapped Base64
-  let rawBytes = cleanStr;
-  if (str.startsWith('=?BINARY?B?')) {
-    try {
-      rawBytes = atob(cleanStr);
-    } catch (e) {
-      console.warn('AUTH: Normalization fallback failed');
-    }
-  }
-
-  // Final conversion to clean Base64URL
+  // 3. Fallback for PHP-wrapped Base64 or standard Base64
   try {
-    return btoa(rawBytes)
+    // If it looks like base64, we need to ensure it's URL safe
+    // First, try to decode it to check if it's valid base64
+    const decoded = atob(cleanStr.replace(/-/g, '+').replace(/_/g, '/'));
+    return btoa(decoded)
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=/g, '');
   } catch (e) {
-    console.error('AUTH: Final Base64URL conversion failed', e);
-    return '';
+    // If not base64, treat as raw bytes if possible
+    try {
+      return btoa(cleanStr)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+    } catch (inner) {
+      console.error('AUTH: Normalization failed for string:', cleanStr);
+      return '';
+    }
   }
 }
 
