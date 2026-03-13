@@ -32,8 +32,8 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 /**
  * Normalizes strings for WebAuthn.
  * 1. Strips PHP binary wrappers (=?BINARY?B?...?=)
- * 2. Treats the resulting payload as literal bytes to match server-side string comparisons.
- * 3. Converts into a clean Base64URL format for the browser API.
+ * 2. Detects 64-char Hex strings (32-byte challenges) and converts them to binary bytes.
+ * 3. Converts into a clean, padding-free Base64URL format for the browser API.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return '';
@@ -41,26 +41,36 @@ function normalizeBase64URL(str: string): string {
   // 1. Strip PHP-style BINARY wrappers
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '');
   
-  // 2. If it was wrapped, it was Base64 encoded by PHP. Decode it to get the raw bytes.
+  // 2. Detect if it's a 64-character hex string (representing 32 bytes)
+  if (/^[0-9a-fA-F]{64}$/.test(cleanStr)) {
+    let rawBytes = '';
+    for (let i = 0; i < cleanStr.length; i += 2) {
+      rawBytes += String.fromCharCode(parseInt(cleanStr.substr(i, 2), 16));
+    }
+    return btoa(rawBytes)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  }
+
+  // 3. Fallback for PHP-wrapped Base64
   let rawBytes = cleanStr;
   if (str.startsWith('=?BINARY?B?')) {
     try {
-      // PHP's base64_encode output might need standardizing for atob
       rawBytes = atob(cleanStr);
     } catch (e) {
-      console.warn('AUTH: Failed to decode PHP binary wrapper. Using raw string.');
+      console.warn('AUTH: Normalization fallback failed');
     }
   }
 
-  // 3. Convert the raw bytes (e.g. the 64-character Hex string) into Base64URL.
-  // We sign the literal characters so they match the server's binary string comparison.
+  // Final conversion to clean Base64URL
   try {
     return btoa(rawBytes)
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=/g, '');
   } catch (e) {
-    console.error('AUTH: Normalization failed', e);
+    console.error('AUTH: Final Base64URL conversion failed', e);
     return '';
   }
 }
@@ -251,7 +261,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (error.name === 'NotSupportedError') {
         errorMessage = 'Passkeys/Biometrics are not supported on this device/browser.';
       } else if (error.name === 'InvalidCharacterError') {
-        errorMessage = 'Encoding Error (atob): Server sent invalid characters. Binary markers were detected and stripped, but the payload may still be malformed.';
+        errorMessage = 'Encoding Error: The server challenge could not be processed. Ensure the server sends a valid Hex or Base64 string.';
       }
       
       toast({

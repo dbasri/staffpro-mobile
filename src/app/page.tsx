@@ -28,7 +28,7 @@ function MainPage() {
   const emailForVerification = searchParams.get('email');
   
   // Clean up URL parameters immediately after successful authentication 
-  // to prevent re-triggering verification or "back-button" email resends.
+  // to prevent re-triggering verification or "back-button" re-entry loops.
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
       router.replace('/');

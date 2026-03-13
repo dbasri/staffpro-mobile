@@ -15,7 +15,7 @@ export const AuthApi = {
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
         method: 'POST',
         mode: 'cors',
-        credentials: 'include', // Sends PHPSESSID for session persistence
+        credentials: 'include', // Essential for PHP session persistence
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
