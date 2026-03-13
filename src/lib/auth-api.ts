@@ -49,7 +49,7 @@ export const AuthApi = {
       const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
         method: 'POST',
         mode: 'cors',
-        credentials: 'include',
+        credentials: 'include', // Ensures PHPSESSID is sent back
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'

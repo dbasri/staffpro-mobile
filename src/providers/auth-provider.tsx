@@ -100,7 +100,8 @@ function prepareWebAuthnOptions(obj: any): any {
       type: 'public-key',
       alg: Number(p.alg)
     }));
-    options.attestation = obj.attestation || 'none';
+    // Use 'none' attestation to avoid certificate chain verification errors on the server
+    options.attestation = 'none';
     if (obj.authenticatorSelection) {
       options.authenticatorSelection = obj.authenticatorSelection;
     }
