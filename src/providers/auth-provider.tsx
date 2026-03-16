@@ -37,8 +37,6 @@ function normalizeBase64URL(str: string): string {
   // Strip PHP binary markers
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
   
-  // If it looks like a 64-character hex string, it might need conversion
-  // but for challenge/id, we usually expect Base64.
   // Standard Base64 to URL-safe Base64URL
   return cleanStr
     .replace(/\+/g, '-')
@@ -48,7 +46,6 @@ function normalizeBase64URL(str: string): string {
 
 /**
  * Deep-walks an options object and normalizes challenge/id fields for simplewebauthn.
- * Also handles mapping rp.id from nested object to top-level rpId for assertions.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;

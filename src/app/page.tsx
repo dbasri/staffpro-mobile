@@ -44,8 +44,9 @@ function MainPage() {
   }, [isLoggingOut, logout]);
 
   useEffect(() => {
-    // Only redirect to login if we are not loading, not authenticated, not verifying, 
-    // and critically, NOT displaying an authentication error.
+    // CRITICAL: Only redirect to login if we are not loading, not authenticated, 
+    // and NOT displaying an authentication error. 
+    // This preserves logs and error messages for debugging failures.
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
       router.replace('/login');
     }

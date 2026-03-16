@@ -8,7 +8,7 @@ import type { UserSession } from '@/types/session';
 export const AuthApi = {
   /**
    * Resiliently extracts and parses the FIRST valid JSON object from a potentially "dirty" 
-   * or concatenated response string.
+   * or concatenated response string. This prevents hangs when servers output multiple objects.
    */
   async parseDirtyJson(response: Response): Promise<any> {
     const text = await response.text();
@@ -26,7 +26,7 @@ export const AuthApi = {
         if (text[i] === '{') braceCount++;
         else if (text[i] === '}') braceCount--;
         
-        if (braceCount === 0) {
+        if (braceCount === 0 && i > firstBrace) {
           lastBrace = i;
           break;
         }
@@ -39,8 +39,8 @@ export const AuthApi = {
       const cleanJson = text.substring(firstBrace, lastBrace + 1);
       return JSON.parse(cleanJson);
     } catch (e: any) {
-      console.error('AUTH: Failed to parse server response:', text);
-      throw new Error(`JSON Parse Error: ${e.message}. See console for raw response.`);
+      console.error('AUTH: Raw response that failed parsing:', text);
+      throw new Error(`JSON Parse Error: ${e.message}`);
     }
   },
 
@@ -50,32 +50,27 @@ export const AuthApi = {
   async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
     
-    try {
-      const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
-        method: 'POST',
-        mode: 'cors',
-        credentials: 'include',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ 
-          origin: origin,
-          email: email,
-          deviceName: deviceName
-        }),
-      });
+    const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
+      method: 'POST',
+      mode: 'cors',
+      credentials: 'include',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ 
+        origin: origin,
+        email: email,
+        deviceName: deviceName
+      }),
+    });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
-      }
-
-      return await this.parseDirtyJson(response);
-    } catch (error: any) {
-      console.error('PASSKEY: Options fetch failed.', error);
-      throw error;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
     }
+
+    return await this.parseDirtyJson(response);
   },
 
   /**
@@ -84,32 +79,27 @@ export const AuthApi = {
   async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
 
-    try {
-      const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
-        method: 'POST',
-        mode: 'cors',
-        credentials: 'include',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          assertion,
-          origin: origin,
-          email: email,
-          deviceName: deviceName
-        }),
-      });
+    const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
+      method: 'POST',
+      mode: 'cors',
+      credentials: 'include',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        assertion,
+        origin: origin,
+        email: email,
+        deviceName: deviceName
+      }),
+    });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Verification error (${response.status}): ${errorText || 'Check server logs'}`);
-      }
-
-      return await this.parseDirtyJson(response);
-    } catch (error: any) {
-      console.error('PASSKEY: Verification fetch failed.', error);
-      throw error;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Verification error (${response.status}): ${errorText || 'Check server logs'}`);
     }
+
+    return await this.parseDirtyJson(response);
   },
 };
