@@ -34,8 +34,11 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
-  // Strip PHP binary markers and trim whitespace
+  // Strip PHP binary markers
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
+  
+  // If it looks like a 64-character hex string, it might need conversion
+  // but for challenge/id, we usually expect Base64.
   // Standard Base64 to URL-safe Base64URL
   return cleanStr
     .replace(/\+/g, '-')
@@ -45,6 +48,7 @@ function normalizeBase64URL(str: string): string {
 
 /**
  * Deep-walks an options object and normalizes challenge/id fields for simplewebauthn.
+ * Also handles mapping rp.id from nested object to top-level rpId for assertions.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -64,6 +68,13 @@ function prepareWebAuthnOptions(obj: any): any {
       normalized[key] = val;
     }
   }
+
+  // SimpleWebAuthn fix: If this is an assertion (no user property) and has rp.id, 
+  // move it to top-level rpId to satisfy the browser API.
+  if (!normalized.user && normalized.rp && normalized.rp.id) {
+    normalized.rpId = normalized.rp.id;
+  }
+
   return normalized;
 }
 
@@ -171,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const deviceName = getDeviceName();
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
-      // Extract clean options directly for simplewebauthn
+      // The server might return the options directly or wrapped in a publicKey key
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       

@@ -71,7 +71,6 @@ export const AuthApi = {
         throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
       }
 
-      // If the server sends multiple objects, parseDirtyJson extracts the first one.
       return await this.parseDirtyJson(response);
     } catch (error: any) {
       console.error('PASSKEY: Options fetch failed.', error);
