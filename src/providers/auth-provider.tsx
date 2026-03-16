@@ -30,97 +30,49 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
- * Normalizes strings for WebAuthn.
+ * Converts strings to WebAuthn-safe Base64URL.
  * 1. Strips PHP binary wrappers (=?BINARY?B?...?=)
- * 2. Detects 64-char Hex strings (32-byte challenges) and converts them to binary bytes.
- * 3. Converts into a clean, padding-free Base64URL format for the browser API.
+ * 2. Swaps standard Base64 characters (+, /) with URL-safe equivalents (-, _)
+ * 3. Strips trailing padding (=)
  */
 function normalizeBase64URL(str: string): string {
-  if (!str || typeof str !== 'string') return '';
+  if (!str || typeof str !== 'string') return str;
   
-  // 1. Strip PHP-style BINARY wrappers
+  // Strip PHP-style BINARY wrappers
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
   
-  // 2. Detect if it's a 64-character hex string (representing 32 bytes)
-  if (/^[0-9a-fA-F]{64}$/.test(cleanStr)) {
-    let rawBytes = '';
-    for (let i = 0; i < cleanStr.length; i += 2) {
-      rawBytes += String.fromCharCode(parseInt(cleanStr.substr(i, 2), 16));
-    }
-    return btoa(rawBytes)
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
-  }
-
-  // 3. Fallback for standard Base64 or already URL-safe Base64
-  try {
-    const decoded = atob(cleanStr.replace(/-/g, '+').replace(/_/g, '/'));
-    return btoa(decoded)
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
-  } catch (e) {
-    try {
-      return btoa(cleanStr)
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
-    } catch (inner) {
-      console.error('AUTH: Normalization failed for string:', cleanStr);
-      return '';
-    }
-  }
+  // Convert Hex (64 chars) to a string representation if needed, 
+  // but usually server sends Base64 inside the binary wrapper.
+  // We simply transform the existing Base64 to Base64URL.
+  return cleanStr
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
 }
 
 /**
- * Reconstructs the options object to satisfy strict WebAuthn standards.
- * Distinguishes between Registration (Creation) and Authentication (Assertion).
+ * Deep-walks an options object and normalizes challenge/id fields.
+ * Preserves the exact structure required by simplewebauthn.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
 
-  const isRegistration = !!(obj.user && obj.user.id);
-
-  if (isRegistration) {
-    // Registration Options Structure
-    return {
-      challenge: normalizeBase64URL(obj.challenge),
-      timeout: Number(obj.timeout) || 60000,
-      rp: {
-        name: obj.rp?.name || 'StaffPro',
-        id: obj.rp?.id || obj.rpId,
-      },
-      user: {
-        id: normalizeBase64URL(obj.user.id),
-        name: obj.user.name || '',
-        displayName: obj.user.displayName || obj.user.name || ''
-      },
-      pubKeyCredParams: (obj.pubKeyCredParams || []).map((p: any) => ({
-        type: 'public-key',
-        alg: Number(p.alg)
-      })),
-      attestation: 'none',
-      authenticatorSelection: obj.authenticatorSelection,
-      excludeCredentials: (obj.excludeCredentials || []).map((c: any) => ({
-        id: normalizeBase64URL(c.id),
-        type: 'public-key'
-      }))
-    };
-  } else {
-    // Authentication (Assertion) Options Structure
-    return {
-      challenge: normalizeBase64URL(obj.challenge),
-      timeout: Number(obj.timeout) || 60000,
-      rpId: obj.rpId || obj.rp?.id, // Top level rpId required for Assertion
-      allowCredentials: (obj.allowCredentials || []).map((c: any) => ({
-        id: normalizeBase64URL(c.id),
-        type: 'public-key',
-        transports: c.transports
-      })),
-      userVerification: obj.userVerification || 'preferred'
-    };
+  if (Array.isArray(obj)) {
+    return obj.map(prepareWebAuthnOptions);
   }
+
+  const normalized: any = {};
+  for (const key in obj) {
+    const val = obj[key];
+    if (key === 'challenge' || key === 'id') {
+      normalized[key] = normalizeBase64URL(val);
+    } else if (typeof val === 'object' && val !== null) {
+      normalized[key] = prepareWebAuthnOptions(val);
+    } else {
+      normalized[key] = val;
+    }
+  }
+  return normalized;
 }
 
 function getDeviceName(): string {
@@ -229,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const deviceName = getDeviceName();
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
+      // Determine if we are registering or authenticating
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       
@@ -237,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       let credentialResponse;
+      // SimpleWebAuthn library structure check
       const isRegistration = !!(options.user && options.user.id);
       
       if (isRegistration) {
@@ -260,9 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error.name === 'SecurityError') {
         errorMessage = 'Security Error: The Relying Party ID (rpId) from the server must match the current domain.';
       } else if (error.name === 'NotAllowedError') {
-        errorMessage = 'Passkey authentication was cancelled or blocked by the browser.';
-      } else if (error.name === 'NotSupportedError') {
-        errorMessage = 'This device/browser does not support WebAuthn or Passkeys.';
+        errorMessage = 'Passkey authentication was cancelled or blocked. Ensure you have a registered passkey for this device.';
       }
       
       toast({

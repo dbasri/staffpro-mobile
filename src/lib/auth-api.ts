@@ -8,7 +8,7 @@ import type { UserSession } from '@/types/session';
 export const AuthApi = {
   /**
    * Resiliently extracts and parses the FIRST valid JSON object from a potentially "dirty" 
-   * or concatenated response string (e.g., PHP servers outputting multiple objects or warnings).
+   * or concatenated response string.
    */
   async parseDirtyJson(response: Response): Promise<any> {
     const text = await response.text();
@@ -45,7 +45,7 @@ export const AuthApi = {
   },
 
   /**
-   * Fetches the WebAuthn authentication options (challenge) from the server.
+   * Fetches the WebAuthn authentication options from the server.
    */
   async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
@@ -54,7 +54,7 @@ export const AuthApi = {
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
         method: 'POST',
         mode: 'cors',
-        credentials: 'include', // Essential for PHP session persistence
+        credentials: 'include',
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
@@ -71,6 +71,7 @@ export const AuthApi = {
         throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
       }
 
+      // If the server sends multiple objects, parseDirtyJson extracts the first one.
       return await this.parseDirtyJson(response);
     } catch (error: any) {
       console.error('PASSKEY: Options fetch failed.', error);
