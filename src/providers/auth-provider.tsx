@@ -32,15 +32,15 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
- * Surgically converts standard Base64 to URL-safe Base64URL by stripping PHP binary markers.
+ * Surgically converts standard Base64 (with optional PHP markers) to URL-safe Base64URL.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
   
-  // Strip PHP binary markers: =?BINARY?B?...=?=
+  // Strip PHP binary markers if present
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
   
-  // Standard Base64 to URL-safe Base64URL
+  // Standard Base64 to URL-safe Base64URL (no padding)
   return cleanStr
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -49,7 +49,6 @@ function normalizeBase64URL(str: string): string {
 
 /**
  * Deeply normalizes WebAuthn options to ensure challenge and id are clean Base64URL strings.
- * Recursively walks the object to handle allowCredentials[].id and other nested binary fields.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -181,21 +180,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
-      // Pass entire response to normalization. Preserves structure for library call.
-      const normalizedOptions = prepareWebAuthnOptions(responseData);
-      console.log('DIAGNOSTIC: [AuthProvider] Options Prepared:', normalizedOptions);
+      // Prepare options. We MUST pass the actual options object (contents of publicKey)
+      // to the simplewebauthn library to avoid "reading allowCredentials" TypeErrors.
+      const normalizedResponse = prepareWebAuthnOptions(responseData);
+      const options = normalizedResponse.publicKey || normalizedResponse;
+      
+      console.log('DIAGNOSTIC: [AuthProvider] Final Options Structure:', options);
       
       // Determine if registration or authentication
-      const innerOptions = normalizedOptions.publicKey || normalizedOptions;
-      const isRegistration = !!(innerOptions.user && innerOptions.user.id);
+      const isRegistration = !!(options.user && options.user.id);
       
       let credentialResponse;
       if (isRegistration) {
         console.log('DIAGNOSTIC: [AuthProvider] Calling startRegistration...');
-        credentialResponse = await startRegistration(normalizedOptions);
+        credentialResponse = await startRegistration(options);
       } else {
         console.log('DIAGNOSTIC: [AuthProvider] Calling startAuthentication...');
-        credentialResponse = await startAuthentication(normalizedOptions);
+        credentialResponse = await startAuthentication(options);
       }
       
       console.log('DIAGNOSTIC: [AuthProvider] Credential received:', credentialResponse);

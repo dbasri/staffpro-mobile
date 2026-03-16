@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import WebView from '@/components/web-view';
-import { Loader2, LogOut } from 'lucide-react';
+import { Loader2, LogOut, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CodeVerificationOverlay from '@/components/auth/code-verification-overlay';
 import { staffproBaseUrl } from '@/lib/config';
@@ -47,7 +47,7 @@ function MainPage() {
   useEffect(() => {
     // DIAGNOSTIC: Block automatic redirect to login if we are displaying an error or verifying.
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
-      console.log('AUTH: Redirecting to login because user is not authenticated');
+      console.log('AUTH: User not authenticated, redirecting to login');
       router.replace('/login');
     }
   }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut, authError, router]);
@@ -134,10 +134,17 @@ function MainPage() {
       {authError && authError !== 'invalid-code' && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/90 p-6 text-center backdrop-blur-sm">
           <div className="max-w-sm space-y-4">
-            <h2 className="text-2xl font-bold text-destructive">Authentication Error</h2>
-            <p className="text-muted-foreground">The authentication process failed or timed out. Please check your network connection and try again.</p>
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+              <AlertCircle className="h-8 w-8 text-destructive" />
+            </div>
+            <h2 className="text-2xl font-bold text-destructive">Sign In Failed</h2>
+            <p className="text-muted-foreground">
+              {authError === 'auth-failed' 
+                ? 'Authentication timed out or was cancelled. Please try again.' 
+                : 'An unexpected error occurred during the login process.'}
+            </p>
             <Button onClick={handleBackToLogin} className="w-full">
-              Back to Login
+              Try Again
             </Button>
           </div>
         </div>

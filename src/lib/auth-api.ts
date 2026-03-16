@@ -39,7 +39,7 @@ export const AuthApi = {
         throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
       }
 
-      // Consuming as JSON immediately to prevent timeout hangs
+      // Standard JSON parsing for clean server response
       const data = await response.json();
       console.log('DIAGNOSTIC: [AuthApi] Received options data:', data);
       return data;
