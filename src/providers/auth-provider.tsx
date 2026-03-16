@@ -30,11 +30,13 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
- * Converts standard Base64 to URL-safe Base64URL.
+ * Converts standard Base64 (including PHP binary markers) to URL-safe Base64URL.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
+  // Strip PHP binary markers and trim whitespace
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
+  // Standard Base64 to URL-safe Base64URL
   return cleanStr
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -42,7 +44,7 @@ function normalizeBase64URL(str: string): string {
 }
 
 /**
- * Deep-walks an options object and normalizes challenge/id fields.
+ * Deep-walks an options object and normalizes challenge/id fields for simplewebauthn.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
