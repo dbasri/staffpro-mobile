@@ -45,7 +45,7 @@ function MainPage() {
 
   useEffect(() => {
     // Only redirect to login if we are not loading, not authenticated, 
-    // and NOT currently displaying an error. This preserves logs.
+    // and NOT currently displaying an error. This preserves failure logs.
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
       router.replace('/login');
     }
@@ -65,14 +65,14 @@ function MainPage() {
   if (isLoggingOut && user) {
     const params = new URLSearchParams({
       logoff: 'true',
-      email: user.email,
+      email: user.email || '',
       session: user.session,
     });
     url = `${staffproBaseUrl}?${params.toString()}`;
   } else if (isAuthenticated && user) {
     const params = new URLSearchParams({
       session: user.session,
-      email: user.email,
+      email: user.email || '',
       origin: typeof window !== 'undefined' ? window.location.origin : '',
     });
     url = `${staffproBaseUrl}?${params.toString()}`;

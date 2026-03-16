@@ -28,6 +28,7 @@ interface AuthContextType {
 export const AuthContext = createContext<AuthContextType | null>(null);
 
 const SESSION_STORAGE_KEY = 'staffpro-session';
+const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
  * Converts standard Base64 (including PHP binary markers) to URL-safe Base64URL.
@@ -66,9 +67,9 @@ function prepareWebAuthnOptions(obj: any): any {
     }
   }
 
-  // SimpleWebAuthn fix: If this is an assertion (no user property) and has rp.id, 
-  // move it to top-level rpId to satisfy the browser API.
-  if (!normalized.user && normalized.rp && normalized.rp.id) {
+  // SimpleWebAuthn structure fix
+  // If we have an rp object but no top-level rpId, copy rp.id to rpId
+  if (normalized.rp && normalized.rp.id && !normalized.rpId) {
     normalized.rpId = normalized.rp.id;
   }
 
@@ -150,7 +151,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (status === 'success') {
         const isActuallyAuthenticated = purpose === 'authenticated' || (purpose.includes('verify') && !purpose.includes('email'));
         if (isActuallyAuthenticated) {
-          loginRef.current({ ...data, method: 'code' });
+          // Preserve email from local storage if the message doesn't contain it
+          const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
+          loginRef.current({ ...data, email, method: 'code' });
         }
       }
     };
@@ -179,7 +182,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const deviceName = getDeviceName();
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
-      // The server might wrap options in publicKey or return them directly
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       
@@ -199,7 +201,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
-        login({ ...result, method: 'passkey' });
+        // Ensure email is passed to session
+        const sessionData = { ...result, email: result.email || email, method: 'passkey' };
+        login(sessionData as UserSession);
         router.replace('/');
       } else {
         throw new Error(result.purpose || 'Passkey verification failed.');

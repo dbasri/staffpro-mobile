@@ -84,7 +84,6 @@ export const AuthApi = {
     const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
       method: 'POST',
       mode: 'cors',
-      redirect: 'manual', 
       credentials: 'include',
       headers: { 
         'Content-Type': 'application/json',
@@ -97,17 +96,6 @@ export const AuthApi = {
         deviceName: deviceName
       }),
     });
-
-    // Handle 302 Redirect as a potential success signal
-    if (response.type === 'opaqueredirect' || response.status === 302) {
-      return {
-        status: 'success',
-        email: email,
-        name: email.split('@')[0],
-        session: 'active',
-        purpose: 'authenticated'
-      };
-    }
 
     if (!response.ok) {
       const errorText = await response.text();
