@@ -86,7 +86,8 @@ function prepareWebAuthnOptions(obj: any): any {
     timeout: Number(obj.timeout) || 60000,
     rp: {
       name: obj.rp?.name || 'StaffPro',
-      id: obj.rp?.id, 
+      // Check both obj.rp.id and top-level obj.rpId
+      id: obj.rp?.id || obj.rpId, 
     },
   };
 
@@ -224,6 +225,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthError(null);
       const deviceName = getDeviceName();
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
+      
+      // Look for publicKey object specifically
       const rawOptions = responseData.publicKey || responseData;
       
       const options = prepareWebAuthnOptions(rawOptions);
@@ -254,7 +257,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let errorMessage = error.message || 'Could not sign in with passkey.';
       
       if (error.name === 'SecurityError') {
-        errorMessage = `SecurityError: The RP ID must match the origin domain (${window.location.hostname}).`;
+        const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
+        errorMessage = `SecurityError: The RP ID from the server must match the origin domain (${origin}). Check the rpId property in your server response.`;
       } else if (error.name === 'NotAllowedError') {
         errorMessage = 'Permissions Policy block or user cancelled. Ensure you are in a top-level tab.';
       } else if (error.name === 'NotSupportedError') {

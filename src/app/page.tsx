@@ -46,9 +46,11 @@ function MainPage() {
 
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut) {
-      window.location.assign('/login');
+      // Use router.replace instead of window.location.assign to prevent 
+      // full page reloads that clear the console and toast messages.
+      router.replace('/login');
     }
-  }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut]);
+  }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut, router]);
 
   const handleCodeSubmit = (code: string) => {
     setVerificationCode(code);
@@ -56,7 +58,7 @@ function MainPage() {
   
   const handleBackToLogin = () => {
     setAuthError(null);
-    window.location.assign('/login');
+    router.replace('/login');
   };
   
   let url: string | null = null;
