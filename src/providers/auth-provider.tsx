@@ -49,6 +49,7 @@ function normalizeBase64URL(str: string): string {
 
 /**
  * Deeply normalizes WebAuthn options to ensure challenge and id are clean Base64URL strings.
+ * Recursively walks the object to handle allowCredentials[].id and other nested binary fields.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -173,20 +174,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const passkeyLogin = useCallback(async (email: string) => {
-    console.log('DIAGNOSTIC: [AuthProvider] Starting passkeyLogin flow for:', email);
+    console.log('DIAGNOSTIC: [AuthProvider] Starting passkeyLogin for:', email);
     try {
       setAuthError(null);
       const deviceName = getDeviceName();
       
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
-      console.log('DIAGNOSTIC: [AuthProvider] Raw response received:', responseData);
       
-      // Pass the entire response to normalization. 
-      // simplewebauthn v10+ handles objects that contain 'publicKey' key by default.
+      // Pass entire response to normalization. Preserves structure for library call.
       const normalizedOptions = prepareWebAuthnOptions(responseData);
-      console.log('DIAGNOSTIC: [AuthProvider] Normalized options:', normalizedOptions);
+      console.log('DIAGNOSTIC: [AuthProvider] Options Prepared:', normalizedOptions);
       
-      // Determine if this is registration or authentication
+      // Determine if registration or authentication
       const innerOptions = normalizedOptions.publicKey || normalizedOptions;
       const isRegistration = !!(innerOptions.user && innerOptions.user.id);
       

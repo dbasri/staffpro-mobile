@@ -39,9 +39,9 @@ export const AuthApi = {
         throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
       }
 
-      // We expect a clean JSON object now.
+      // Consuming as JSON immediately to prevent timeout hangs
       const data = await response.json();
-      console.log('DIAGNOSTIC: [AuthApi] Received JSON data:', data);
+      console.log('DIAGNOSTIC: [AuthApi] Received options data:', data);
       return data;
     } catch (error) {
       console.error('DIAGNOSTIC ERROR: [AuthApi] Fetch failed:', error);
@@ -82,7 +82,7 @@ export const AuthApi = {
       }
 
       const data = await response.json();
-      console.log('DIAGNOSTIC: [AuthApi] Verification JSON response:', data);
+      console.log('DIAGNOSTIC: [AuthApi] Verification success data:', data);
       return data;
     } catch (error) {
       console.error('DIAGNOSTIC ERROR: [AuthApi] Verification failed:', error);

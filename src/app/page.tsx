@@ -45,9 +45,9 @@ function MainPage() {
   }, [isLoggingOut, logout]);
 
   useEffect(() => {
-    // block automatic redirect to login if we are currently displaying an error or verifying.
+    // DIAGNOSTIC: Block automatic redirect to login if we are displaying an error or verifying.
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
-      console.log('DIAGNOSTIC: [MainPage] Redirecting to login because user is not authenticated');
+      console.log('AUTH: Redirecting to login because user is not authenticated');
       router.replace('/login');
     }
   }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut, authError, router]);
