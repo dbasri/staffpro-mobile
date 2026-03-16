@@ -3,24 +3,44 @@ import type { UserSession } from '@/types/session';
 
 /**
  * Service to handle direct POST communications with the StaffPro authentication endpoints.
- * Includes a resilient JSON parser to handle PHP servers that may output trailing warnings or characters.
+ * Includes a resilient parser to handle concatenated JSON objects or trailing server warnings.
  */
 export const AuthApi = {
   /**
-   * Helper to extract and parse the first valid JSON object from a potentially "dirty" response string.
+   * Resiliently extracts and parses the FIRST valid JSON object from a potentially "dirty" 
+   * or concatenated response string (e.g., PHP servers outputting multiple objects or warnings).
    */
   async parseDirtyJson(response: Response): Promise<any> {
     const text = await response.text();
     try {
-      // Find the first instance of a JSON object/array in the string
-      const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-      if (!jsonMatch) {
-        throw new Error("No valid JSON found in server response.");
+      // Find the first opening brace
+      const firstBrace = text.indexOf('{');
+      if (firstBrace === -1) {
+        throw new Error("No opening brace found in response.");
       }
-      return JSON.parse(jsonMatch[0]);
+
+      // Brace counting to find the end of the FIRST complete object
+      let braceCount = 0;
+      let lastBrace = -1;
+      for (let i = firstBrace; i < text.length; i++) {
+        if (text[i] === '{') braceCount++;
+        else if (text[i] === '}') braceCount--;
+        
+        if (braceCount === 0) {
+          lastBrace = i;
+          break;
+        }
+      }
+
+      if (lastBrace === -1) {
+        throw new Error("Could not find a balanced closing brace.");
+      }
+
+      const cleanJson = text.substring(firstBrace, lastBrace + 1);
+      return JSON.parse(cleanJson);
     } catch (e: any) {
       console.error('AUTH: Failed to parse server response:', text);
-      throw new Error(`JSON Parse Error: ${e.message}. See console for raw response.`);
+      throw new Error(`JSON Parse Error: ${e.message}. Raw response: ${text.substring(0, 100)}...`);
     }
   },
 

@@ -81,13 +81,12 @@ function prepareWebAuthnOptions(obj: any): any {
 
   const isRegistration = !!(obj.user && obj.user.id);
 
-  // Note: Your server sends "rpId" at the top level, while the spec often expects it inside "rp.id"
   const options: any = {
     challenge: normalizeBase64URL(obj.challenge),
     timeout: Number(obj.timeout) || 60000,
     rp: {
       name: obj.rp?.name || 'StaffPro',
-      id: obj.rp?.id || obj.rpId, // Handles top-level rpId from your server
+      id: obj.rp?.id || obj.rpId, // Handles both rp.id and top-level rpId from server
     },
   };
 
@@ -101,8 +100,7 @@ function prepareWebAuthnOptions(obj: any): any {
       type: 'public-key',
       alg: Number(p.alg)
     }));
-    // Use 'none' attestation to avoid certificate chain verification errors on the server
-    options.attestation = 'none';
+    options.attestation = 'none'; // Platform authenticators often lack verifiable hardware roots
     if (obj.authenticatorSelection) {
       options.authenticatorSelection = obj.authenticatorSelection;
     }
@@ -226,13 +224,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const deviceName = getDeviceName();
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
-      // Look for publicKey object specifically
       const rawOptions = responseData.publicKey || responseData;
-      
       const options = prepareWebAuthnOptions(rawOptions);
       
       if (!options.challenge) {
-        throw new Error('Server response missing "challenge" property.');
+        throw new Error('Server response missing WebAuthn challenge.');
       }
 
       let credentialResponse;
@@ -257,14 +253,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let errorMessage = error.message || 'Could not sign in with passkey.';
       
       if (error.name === 'SecurityError') {
-        const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
-        errorMessage = `SecurityError: The RP ID from the server must match the origin domain (${origin}). Current RP ID: ${prepareWebAuthnOptions(error.options)?.rp?.id || 'unknown'}`;
+        errorMessage = 'Security Error: The Relying Party ID (rpId) from the server must match the current domain. Check your server-side configuration.';
       } else if (error.name === 'NotAllowedError') {
-        errorMessage = 'Permissions Policy block or user cancelled. Ensure you are in a top-level tab.';
+        errorMessage = 'Passkey authentication was cancelled or blocked by the browser.';
       } else if (error.name === 'NotSupportedError') {
-        errorMessage = 'Passkeys/Biometrics are not supported on this device/browser.';
-      } else if (error.name === 'InvalidCharacterError') {
-        errorMessage = 'Encoding Error: The server challenge could not be processed. Ensure the server sends a valid Hex or Base64 string.';
+        errorMessage = 'This device/browser does not support WebAuthn or Passkeys.';
       }
       
       toast({
