@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
@@ -44,9 +45,9 @@ function MainPage() {
   }, [isLoggingOut, logout]);
 
   useEffect(() => {
-    // Stop automatic redirect to login if we are currently displaying an error.
-    // This allows the user to read the failure logs/toasts.
+    // block automatic redirect to login if we are currently displaying an error or verifying.
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
+      console.log('DIAGNOSTIC: [MainPage] Redirecting to login because user is not authenticated');
       router.replace('/login');
     }
   }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut, authError, router]);
@@ -127,6 +128,18 @@ function MainPage() {
             <LogOut className="h-4 w-4" />
             Sign Out
           </Button>
+        </div>
+      )}
+
+      {authError && authError !== 'invalid-code' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/90 p-6 text-center backdrop-blur-sm">
+          <div className="max-w-sm space-y-4">
+            <h2 className="text-2xl font-bold text-destructive">Authentication Error</h2>
+            <p className="text-muted-foreground">The authentication process failed or timed out. Please check your network connection and try again.</p>
+            <Button onClick={handleBackToLogin} className="w-full">
+              Back to Login
+            </Button>
+          </div>
         </div>
       )}
     </main>

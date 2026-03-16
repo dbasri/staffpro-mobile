@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -31,7 +32,7 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
- * Converts standard Base64 (including PHP binary markers) to URL-safe Base64URL.
+ * Surgically converts standard Base64 to URL-safe Base64URL by stripping PHP binary markers.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
@@ -40,9 +41,6 @@ function normalizeBase64URL(str: string): string {
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
   
   // Standard Base64 to URL-safe Base64URL
-  // 1. Swap + for -
-  // 2. Swap / for _
-  // 3. Remove padding =
   return cleanStr
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -50,7 +48,7 @@ function normalizeBase64URL(str: string): string {
 }
 
 /**
- * Normalizes options for SimpleWebAuthn.
+ * Deeply normalizes WebAuthn options to ensure challenge and id are clean Base64URL strings.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -62,7 +60,6 @@ function prepareWebAuthnOptions(obj: any): any {
   const normalized: any = {};
   for (const key in obj) {
     const val = obj[key];
-    // id and challenge are the primary fields that MUST be Base64URL
     if (key === 'challenge' || key === 'id') {
       normalized[key] = typeof val === 'string' ? normalizeBase64URL(val) : val;
     } else if (typeof val === 'object' && val !== null) {
@@ -181,39 +178,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthError(null);
       const deviceName = getDeviceName();
       
-      console.log('DIAGNOSTIC: [AuthProvider] Requesting options from AuthApi...');
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
+      console.log('DIAGNOSTIC: [AuthProvider] Raw response received:', responseData);
       
-      console.log('DIAGNOSTIC: [AuthProvider] AuthApi options received:', responseData);
-      const rawOptions = responseData.publicKey || responseData;
+      // Pass the entire response to normalization. 
+      // simplewebauthn v10+ handles objects that contain 'publicKey' key by default.
+      const normalizedOptions = prepareWebAuthnOptions(responseData);
+      console.log('DIAGNOSTIC: [AuthProvider] Normalized options:', normalizedOptions);
       
-      console.log('DIAGNOSTIC: [AuthProvider] Normalizing WebAuthn options...');
-      const options = prepareWebAuthnOptions(rawOptions);
-      console.log('DIAGNOSTIC: [AuthProvider] Options normalized for browser:', options);
+      // Determine if this is registration or authentication
+      const innerOptions = normalizedOptions.publicKey || normalizedOptions;
+      const isRegistration = !!(innerOptions.user && innerOptions.user.id);
       
-      if (!options || !options.challenge) {
-        throw new Error('Server response missing WebAuthn challenge.');
-      }
-
       let credentialResponse;
-      // If server returns user data, it's a registration call
-      const isRegistration = !!(options.user && options.user.id);
-      
-      console.log('DIAGNOSTIC: [AuthProvider] Mode:', isRegistration ? 'REGISTRATION' : 'ASSERTION/LOGIN');
-      
       if (isRegistration) {
         console.log('DIAGNOSTIC: [AuthProvider] Calling startRegistration...');
-        credentialResponse = await startRegistration(options);
+        credentialResponse = await startRegistration(normalizedOptions);
       } else {
         console.log('DIAGNOSTIC: [AuthProvider] Calling startAuthentication...');
-        credentialResponse = await startAuthentication(options);
+        credentialResponse = await startAuthentication(normalizedOptions);
       }
       
-      console.log('DIAGNOSTIC: [AuthProvider] Credential received from browser:', credentialResponse);
-      
-      console.log('DIAGNOSTIC: [AuthProvider] Sending credential to AuthApi for verification...');
+      console.log('DIAGNOSTIC: [AuthProvider] Credential received:', credentialResponse);
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
-      console.log('DIAGNOSTIC: [AuthProvider] Verification result:', result);
       
       if (result.status === 'success') {
         const sessionData = { 

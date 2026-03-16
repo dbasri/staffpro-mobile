@@ -1,3 +1,4 @@
+
 'use client';
 
 import { staffproBaseUrl } from './config';
@@ -13,7 +14,7 @@ export const AuthApi = {
   async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
     
-    console.log('DIAGNOSTIC: [AuthApi] Requesting passkey options for:', email);
+    console.log('DIAGNOSTIC: [AuthApi] Requesting options for:', email);
     
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
@@ -38,6 +39,7 @@ export const AuthApi = {
         throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
       }
 
+      // We expect a clean JSON object now.
       const data = await response.json();
       console.log('DIAGNOSTIC: [AuthApi] Received JSON data:', data);
       return data;
@@ -53,7 +55,7 @@ export const AuthApi = {
   async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
 
-    console.log('DIAGNOSTIC: [AuthApi] Verifying passkey for:', email);
+    console.log('DIAGNOSTIC: [AuthApi] Verifying passkey assertion for:', email);
 
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
