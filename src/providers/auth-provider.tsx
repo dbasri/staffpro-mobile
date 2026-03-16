@@ -67,8 +67,7 @@ function prepareWebAuthnOptions(obj: any): any {
     }
   }
 
-  // SimpleWebAuthn structure fix
-  // If we have an rp object but no top-level rpId, copy rp.id to rpId
+  // SimpleWebAuthn structure fix for registration
   if (normalized.rp && normalized.rp.id && !normalized.rpId) {
     normalized.rpId = normalized.rp.id;
   }
@@ -151,7 +150,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (status === 'success') {
         const isActuallyAuthenticated = purpose === 'authenticated' || (purpose.includes('verify') && !purpose.includes('email'));
         if (isActuallyAuthenticated) {
-          // Preserve email from local storage if the message doesn't contain it
           const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
           loginRef.current({ ...data, email, method: 'code' });
         }
@@ -201,7 +199,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
-        // Ensure email is passed to session
         const sessionData = { ...result, email: result.email || email, method: 'passkey' };
         login(sessionData as UserSession);
         router.replace('/');

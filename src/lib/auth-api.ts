@@ -10,7 +10,8 @@ import type { UserSession } from '@/types/session';
 export const AuthApi = {
   /**
    * Resiliently extracts and parses the FIRST valid JSON object from a potentially "dirty" 
-   * or concatenated response string. This prevents hangs when servers output multiple objects.
+   * or concatenated response string. This prevents hangs when servers output multiple objects
+   * or keep the connection open with trailing whitespace.
    */
   async parseDirtyJson(text: string): Promise<any> {
     try {
@@ -23,14 +24,27 @@ export const AuthApi = {
       // Brace counting to find the end of the FIRST complete object
       let braceCount = 0;
       let lastBrace = -1;
+      let inString = false;
+      let escaped = false;
+
       for (let i = firstBrace; i < text.length; i++) {
-        if (text[i] === '{') braceCount++;
-        else if (text[i] === '}') braceCount--;
+        const char = text[i];
         
-        if (braceCount === 0 && i > firstBrace) {
-          lastBrace = i;
-          break;
+        if (char === '"' && !escaped) {
+          inString = !inString;
         }
+        
+        if (!inString) {
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          
+          if (braceCount === 0 && i > firstBrace) {
+            lastBrace = i;
+            break;
+          }
+        }
+
+        escaped = char === '\\' && !escaped;
       }
 
       if (lastBrace === -1) {
@@ -40,7 +54,7 @@ export const AuthApi = {
       const cleanJson = text.substring(firstBrace, lastBrace + 1);
       return JSON.parse(cleanJson);
     } catch (e: any) {
-      console.warn('AUTH: Raw response was not valid JSON or contained extra data:', text.substring(0, 100) + '...');
+      console.warn('AUTH: Raw response was not valid JSON or contained extra data:', text.substring(0, 200) + '...');
       throw new Error(`JSON Parse Error: ${e.message}. See console for raw response.`);
     }
   },
