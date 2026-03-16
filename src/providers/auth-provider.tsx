@@ -81,13 +81,13 @@ function prepareWebAuthnOptions(obj: any): any {
 
   const isRegistration = !!(obj.user && obj.user.id);
 
+  // Note: Your server sends "rpId" at the top level, while the spec often expects it inside "rp.id"
   const options: any = {
     challenge: normalizeBase64URL(obj.challenge),
     timeout: Number(obj.timeout) || 60000,
     rp: {
       name: obj.rp?.name || 'StaffPro',
-      // Check both obj.rp.id and top-level obj.rpId
-      id: obj.rp?.id || obj.rpId, 
+      id: obj.rp?.id || obj.rpId, // Handles top-level rpId from your server
     },
   };
 
@@ -258,7 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (error.name === 'SecurityError') {
         const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
-        errorMessage = `SecurityError: The RP ID from the server must match the origin domain (${origin}). Check the rpId property in your server response.`;
+        errorMessage = `SecurityError: The RP ID from the server must match the origin domain (${origin}). Current RP ID: ${prepareWebAuthnOptions(error.options)?.rp?.id || 'unknown'}`;
       } else if (error.name === 'NotAllowedError') {
         errorMessage = 'Permissions Policy block or user cancelled. Ensure you are in a top-level tab.';
       } else if (error.name === 'NotSupportedError') {
