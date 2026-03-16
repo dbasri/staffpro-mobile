@@ -41,7 +41,7 @@ export const AuthApi = {
       return JSON.parse(cleanJson);
     } catch (e: any) {
       console.warn('AUTH: Raw response was not valid JSON or contained extra data:', text.substring(0, 100) + '...');
-      throw e;
+      throw new Error(`JSON Parse Error: ${e.message}. See console for raw response.`);
     }
   },
 
