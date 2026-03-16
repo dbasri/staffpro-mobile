@@ -30,20 +30,11 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 
 /**
- * Converts strings to WebAuthn-safe Base64URL.
- * 1. Strips PHP binary wrappers (=?BINARY?B?...?=)
- * 2. Swaps standard Base64 characters (+, /) with URL-safe equivalents (-, _)
- * 3. Strips trailing padding (=)
+ * Converts standard Base64 to URL-safe Base64URL.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
-  
-  // Strip PHP-style BINARY wrappers
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
-  
-  // Convert Hex (64 chars) to a string representation if needed, 
-  // but usually server sends Base64 inside the binary wrapper.
-  // We simply transform the existing Base64 to Base64URL.
   return cleanStr
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -52,7 +43,6 @@ function normalizeBase64URL(str: string): string {
 
 /**
  * Deep-walks an options object and normalizes challenge/id fields.
- * Preserves the exact structure required by simplewebauthn.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -111,10 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null);
     setAuthError(null);
-    if (typeof window !== 'undefined') {
-      window.location.replace(window.location.origin);
-    }
-  }, []);
+    router.replace('/login');
+  }, [router]);
 
   const logoutRef = useRef(logout);
   const loginRef = useRef(login);
@@ -181,16 +169,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const deviceName = getDeviceName();
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
-      // Determine if we are registering or authenticating
+      // Extract clean options directly for simplewebauthn
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       
-      if (!options.challenge) {
+      if (!options || !options.challenge) {
         throw new Error('Server response missing WebAuthn challenge.');
       }
 
       let credentialResponse;
-      // SimpleWebAuthn library structure check
+      // registration options have a 'user' property, login (assertion) does not
       const isRegistration = !!(options.user && options.user.id);
       
       if (isRegistration) {
@@ -208,15 +196,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(result.purpose || 'Passkey verification failed.');
       }
     } catch (error: any) {
-      console.error('PASSKEY: Error details:', error);
+      console.error('PASSKEY: Detailed error:', error);
       let errorMessage = error.message || 'Could not sign in with passkey.';
       
       if (error.name === 'SecurityError') {
-        errorMessage = 'Security Error: The Relying Party ID (rpId) from the server must match the current domain.';
+        errorMessage = 'Domain mismatch: The rpId from server must match or be a suffix of ' + window.location.hostname;
       } else if (error.name === 'NotAllowedError') {
-        errorMessage = 'Passkey authentication was cancelled or blocked. Ensure you have a registered passkey for this device.';
+        errorMessage = 'Authentication timed out or was cancelled.';
       }
-      
+
+      setAuthError('auth-failed');
       toast({
         title: 'Authentication Failed',
         description: errorMessage,

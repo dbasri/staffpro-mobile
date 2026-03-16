@@ -27,9 +27,7 @@ function MainPage() {
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
-  // Clean up URL parameters immediately after successful authentication 
-  // to prevent re-triggering verification or "back-button" re-entry loops.
-  // Using router.replace ensures we don't trigger full page reloads that clear the console.
+  // Clean up URL parameters immediately after successful authentication
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
       router.replace('/');
@@ -46,10 +44,12 @@ function MainPage() {
   }, [isLoggingOut, logout]);
 
   useEffect(() => {
-    if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut) {
+    // Only redirect to login if we are not loading, not authenticated, not verifying, 
+    // and critically, NOT displaying an authentication error.
+    if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
       router.replace('/login');
     }
-  }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut, router]);
+  }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut, authError, router]);
 
   const handleCodeSubmit = (code: string) => {
     setVerificationCode(code);
@@ -94,7 +94,7 @@ function MainPage() {
     return <GlobalLoader />;
   }
 
-  if (url === null && !isAuthenticated) {
+  if (url === null && !isAuthenticated && !authError) {
       return <GlobalLoader />;
   }
   
