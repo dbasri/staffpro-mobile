@@ -77,7 +77,6 @@ export const AuthApi = {
 
   /**
    * Sends the signed passkey assertion back to the server for verification.
-   * Uses redirect: 'manual' to handle cases where the server redirects to a dashboard on success.
    */
   async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
@@ -85,7 +84,7 @@ export const AuthApi = {
     const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
       method: 'POST',
       mode: 'cors',
-      redirect: 'manual', // CRITICAL: Stop the browser from following 302s that cause CORS failures
+      redirect: 'manual', 
       credentials: 'include',
       headers: { 
         'Content-Type': 'application/json',
@@ -99,13 +98,13 @@ export const AuthApi = {
       }),
     });
 
-    // Handle 302 Redirect as a success signal (common in PHP apps)
+    // Handle 302 Redirect as a potential success signal
     if (response.type === 'opaqueredirect' || response.status === 302) {
       return {
         status: 'success',
         email: email,
         name: email.split('@')[0],
-        session: 'active', // Placeholder since we can't read the redirect target
+        session: 'active',
         purpose: 'authenticated'
       };
     }
@@ -116,22 +115,6 @@ export const AuthApi = {
     }
 
     const text = await response.text();
-    
-    try {
-      return await this.parseDirtyJson(text);
-    } catch (e) {
-      // If we got a 200 OK but the body is HTML (no JSON), it likely worked 
-      // but the server didn't provide a JSON response.
-      if (text.toLowerCase().includes('<html')) {
-        return {
-          status: 'success',
-          email: email,
-          name: email.split('@')[0],
-          session: 'active',
-          purpose: 'authenticated'
-        };
-      }
-      throw e;
-    }
+    return await this.parseDirtyJson(text);
   },
 };

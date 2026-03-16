@@ -34,7 +34,7 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
-  // Strip PHP binary markers
+  // Strip PHP binary markers: =?BINARY?B?...=?=
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
   
   // Standard Base64 to URL-safe Base64URL
@@ -179,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const deviceName = getDeviceName();
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
+      // The server might wrap options in publicKey or return them directly
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       
@@ -204,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(result.purpose || 'Passkey verification failed.');
       }
     } catch (error: any) {
-      console.error('PASSKEY: Detailed error:', error);
+      console.error('PASSKEY: Error details:', error);
       let errorMessage = error.message || 'Could not sign in with passkey.';
       
       if (error.name === 'SecurityError') {
