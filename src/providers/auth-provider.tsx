@@ -35,10 +35,14 @@ const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
+  
   // Strip PHP binary markers: =?BINARY?B?...=?=
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
   
   // Standard Base64 to URL-safe Base64URL
+  // 1. Swap + for -
+  // 2. Swap / for _
+  // 3. Remove padding =
   return cleanStr
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -47,8 +51,6 @@ function normalizeBase64URL(str: string): string {
 
 /**
  * Normalizes options for SimpleWebAuthn.
- * In Assertion (Login), rpId must be top-level. 
- * In Registration, rp is an object { id, name }.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -60,6 +62,7 @@ function prepareWebAuthnOptions(obj: any): any {
   const normalized: any = {};
   for (const key in obj) {
     const val = obj[key];
+    // id and challenge are the primary fields that MUST be Base64URL
     if (key === 'challenge' || key === 'id') {
       normalized[key] = typeof val === 'string' ? normalizeBase64URL(val) : val;
     } else if (typeof val === 'object' && val !== null) {
@@ -90,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   const login = useCallback((sessionData: UserSession) => {
+    console.log('DIAGNOSTIC: [AuthProvider] Finalizing login session:', sessionData);
     setUser(sessionData);
     setAuthError(null);
     try {
@@ -100,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    console.log('DIAGNOSTIC: [AuthProvider] Logging out');
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } catch (error) {
@@ -171,13 +176,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const passkeyLogin = useCallback(async (email: string) => {
+    console.log('DIAGNOSTIC: [AuthProvider] Starting passkeyLogin flow for:', email);
     try {
       setAuthError(null);
       const deviceName = getDeviceName();
+      
+      console.log('DIAGNOSTIC: [AuthProvider] Requesting options from AuthApi...');
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
+      console.log('DIAGNOSTIC: [AuthProvider] AuthApi options received:', responseData);
       const rawOptions = responseData.publicKey || responseData;
+      
+      console.log('DIAGNOSTIC: [AuthProvider] Normalizing WebAuthn options...');
       const options = prepareWebAuthnOptions(rawOptions);
+      console.log('DIAGNOSTIC: [AuthProvider] Options normalized for browser:', options);
       
       if (!options || !options.challenge) {
         throw new Error('Server response missing WebAuthn challenge.');
@@ -187,13 +199,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // If server returns user data, it's a registration call
       const isRegistration = !!(options.user && options.user.id);
       
+      console.log('DIAGNOSTIC: [AuthProvider] Mode:', isRegistration ? 'REGISTRATION' : 'ASSERTION/LOGIN');
+      
       if (isRegistration) {
+        console.log('DIAGNOSTIC: [AuthProvider] Calling startRegistration...');
         credentialResponse = await startRegistration(options);
       } else {
+        console.log('DIAGNOSTIC: [AuthProvider] Calling startAuthentication...');
         credentialResponse = await startAuthentication(options);
       }
       
+      console.log('DIAGNOSTIC: [AuthProvider] Credential received from browser:', credentialResponse);
+      
+      console.log('DIAGNOSTIC: [AuthProvider] Sending credential to AuthApi for verification...');
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
+      console.log('DIAGNOSTIC: [AuthProvider] Verification result:', result);
       
       if (result.status === 'success') {
         const sessionData = { 
@@ -207,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(result.purpose || 'Passkey verification failed.');
       }
     } catch (error: any) {
-      console.error('PASSKEY: Authentication Error:', error);
+      console.error('DIAGNOSTIC ERROR: [AuthProvider] Authentication Error:', error);
       let errorMessage = error.message || 'Could not sign in with passkey.';
       
       if (error.name === 'SecurityError') {

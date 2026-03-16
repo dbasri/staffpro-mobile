@@ -13,28 +13,38 @@ export const AuthApi = {
   async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
     
-    const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
-      method: 'POST',
-      mode: 'cors',
-      credentials: 'include',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ 
-        origin: origin,
-        email: email,
-        deviceName: deviceName
-      }),
-    });
+    console.log('DIAGNOSTIC: [AuthApi] Requesting passkey options for:', email);
+    
+    try {
+      const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'include',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ 
+          origin: origin,
+          email: email,
+          deviceName: deviceName
+        }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
+      console.log('DIAGNOSTIC: [AuthApi] Server responded with status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
+      }
+
+      const data = await response.json();
+      console.log('DIAGNOSTIC: [AuthApi] Received JSON data:', data);
+      return data;
+    } catch (error) {
+      console.error('DIAGNOSTIC ERROR: [AuthApi] Fetch failed:', error);
+      throw error;
     }
-
-    const data = await response.json();
-    return data;
   },
 
   /**
@@ -43,28 +53,38 @@ export const AuthApi = {
   async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
 
-    const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
-      method: 'POST',
-      mode: 'cors',
-      credentials: 'include',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        assertion,
-        origin: origin,
-        email: email,
-        deviceName: deviceName
-      }),
-    });
+    console.log('DIAGNOSTIC: [AuthApi] Verifying passkey for:', email);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Verification error (${response.status}): ${errorText || 'Check server logs'}`);
+    try {
+      const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'include',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          assertion,
+          origin: origin,
+          email: email,
+          deviceName: deviceName
+        }),
+      });
+
+      console.log('DIAGNOSTIC: [AuthApi] Verification server responded with status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Verification error (${response.status}): ${errorText || 'Check server logs'}`);
+      }
+
+      const data = await response.json();
+      console.log('DIAGNOSTIC: [AuthApi] Verification JSON response:', data);
+      return data;
+    } catch (error) {
+      console.error('DIAGNOSTIC ERROR: [AuthApi] Verification failed:', error);
+      throw error;
     }
-
-    const data = await response.json();
-    return data;
   },
 };
