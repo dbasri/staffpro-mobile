@@ -4,61 +4,9 @@ import { staffproBaseUrl } from './config';
 import type { UserSession } from '@/types/session';
 
 /**
- * Service to handle direct POST communications with the StaffPro authentication endpoints.
- * Includes a resilient parser to handle concatenated JSON objects or trailing server warnings.
+ * Service to handle communications with the StaffPro authentication endpoints.
  */
 export const AuthApi = {
-  /**
-   * Resiliently extracts and parses the FIRST valid JSON object from a potentially "dirty" 
-   * or concatenated response string. This prevents hangs when servers output multiple objects
-   * or keep the connection open with trailing whitespace.
-   */
-  async parseDirtyJson(text: string): Promise<any> {
-    try {
-      // Find the first opening brace
-      const firstBrace = text.indexOf('{');
-      if (firstBrace === -1) {
-        throw new Error("No JSON object found in response.");
-      }
-
-      // Brace counting to find the end of the FIRST complete object
-      let braceCount = 0;
-      let lastBrace = -1;
-      let inString = false;
-      let escaped = false;
-
-      for (let i = firstBrace; i < text.length; i++) {
-        const char = text[i];
-        
-        if (char === '"' && !escaped) {
-          inString = !inString;
-        }
-        
-        if (!inString) {
-          if (char === '{') braceCount++;
-          else if (char === '}') braceCount--;
-          
-          if (braceCount === 0 && i > firstBrace) {
-            lastBrace = i;
-            break;
-          }
-        }
-
-        escaped = char === '\\' && !escaped;
-      }
-
-      if (lastBrace === -1) {
-        throw new Error("Could not find a balanced closing brace.");
-      }
-
-      const cleanJson = text.substring(firstBrace, lastBrace + 1);
-      return JSON.parse(cleanJson);
-    } catch (e: any) {
-      console.warn('AUTH: Raw response was not valid JSON or contained extra data:', text.substring(0, 200) + '...');
-      throw new Error(`JSON Parse Error: ${e.message}. See console for raw response.`);
-    }
-  },
-
   /**
    * Fetches the WebAuthn authentication options from the server.
    */
@@ -85,8 +33,7 @@ export const AuthApi = {
       throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
     }
 
-    const text = await response.text();
-    return await this.parseDirtyJson(text);
+    return await response.json();
   },
 
   /**
@@ -116,7 +63,6 @@ export const AuthApi = {
       throw new Error(`Verification error (${response.status}): ${errorText || 'Check server logs'}`);
     }
 
-    const text = await response.text();
-    return await this.parseDirtyJson(text);
+    return await response.json();
   },
 };

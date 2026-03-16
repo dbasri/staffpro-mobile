@@ -59,19 +59,13 @@ function prepareWebAuthnOptions(obj: any): any {
   for (const key in obj) {
     const val = obj[key];
     if (key === 'challenge' || key === 'id') {
-      normalized[key] = normalizeBase64URL(val);
+      normalized[key] = typeof val === 'string' ? normalizeBase64URL(val) : val;
     } else if (typeof val === 'object' && val !== null) {
       normalized[key] = prepareWebAuthnOptions(val);
     } else {
       normalized[key] = val;
     }
   }
-
-  // SimpleWebAuthn structure fix for registration
-  if (normalized.rp && normalized.rp.id && !normalized.rpId) {
-    normalized.rpId = normalized.rp.id;
-  }
-
   return normalized;
 }
 
