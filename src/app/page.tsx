@@ -38,14 +38,14 @@ function MainPage() {
     if (isLoggingOut) {
       const timer = setTimeout(() => {
         logout();
-      }, 2000);
+      }, 1500);
       return () => clearTimeout(timer);
     }
   }, [isLoggingOut, logout]);
 
   useEffect(() => {
-    // Only redirect to login if we are not loading, not authenticated, 
-    // and NOT currently displaying an error. This preserves failure logs.
+    // Stop automatic redirect to login if we are currently displaying an error.
+    // This allows the user to read the failure logs/toasts.
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
       router.replace('/login');
     }

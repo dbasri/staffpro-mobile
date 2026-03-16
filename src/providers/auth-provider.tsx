@@ -46,7 +46,9 @@ function normalizeBase64URL(str: string): string {
 }
 
 /**
- * Deep-walks an options object and normalizes challenge/id fields for simplewebauthn.
+ * Normalizes options for SimpleWebAuthn.
+ * In Assertion (Login), rpId must be top-level. 
+ * In Registration, rp is an object { id, name }.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -182,6 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       let credentialResponse;
+      // If server returns user data, it's a registration call
       const isRegistration = !!(options.user && options.user.id);
       
       if (isRegistration) {
@@ -193,22 +196,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
-        const sessionData = { ...result, email: result.email || email, method: 'passkey' };
+        const sessionData = { 
+          ...result, 
+          email: result.email || email, 
+          method: 'passkey' 
+        };
         login(sessionData as UserSession);
         router.replace('/');
       } else {
         throw new Error(result.purpose || 'Passkey verification failed.');
       }
     } catch (error: any) {
-      console.error('PASSKEY: Error details:', error);
+      console.error('PASSKEY: Authentication Error:', error);
       let errorMessage = error.message || 'Could not sign in with passkey.';
       
       if (error.name === 'SecurityError') {
-        errorMessage = 'Domain mismatch: The rpId from server must match or be a suffix of ' + window.location.hostname;
+        errorMessage = 'Domain mismatch: RP ID does not match the current origin.';
       } else if (error.name === 'NotAllowedError') {
-        errorMessage = 'Authentication timed out or was cancelled.';
-      } else if (error.name === 'AbortError') {
-        errorMessage = 'Operation aborted by browser.';
+        errorMessage = 'Authentication timed out or was cancelled by user.';
       }
 
       setAuthError('auth-failed');

@@ -33,7 +33,8 @@ export const AuthApi = {
       throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
     }
 
-    return await response.json();
+    const data = await response.json();
+    return data;
   },
 
   /**
@@ -63,6 +64,7 @@ export const AuthApi = {
       throw new Error(`Verification error (${response.status}): ${errorText || 'Check server logs'}`);
     }
 
-    return await response.json();
+    const data = await response.json();
+    return data;
   },
 };
