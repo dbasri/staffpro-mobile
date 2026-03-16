@@ -53,7 +53,7 @@ function normalizeBase64URL(str: string): string {
       .replace(/=/g, '');
   }
 
-  // 3. Fallback for PHP-wrapped Base64 or standard Base64
+  // 3. Fallback for standard Base64 or already URL-safe Base64
   try {
     const decoded = atob(cleanStr.replace(/-/g, '+').replace(/_/g, '/'));
     return btoa(decoded)
@@ -75,47 +75,52 @@ function normalizeBase64URL(str: string): string {
 
 /**
  * Reconstructs the options object to satisfy strict WebAuthn standards.
+ * Distinguishes between Registration (Creation) and Authentication (Assertion).
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
 
   const isRegistration = !!(obj.user && obj.user.id);
 
-  const options: any = {
-    challenge: normalizeBase64URL(obj.challenge),
-    timeout: Number(obj.timeout) || 60000,
-    rp: {
-      name: obj.rp?.name || 'StaffPro',
-      id: obj.rp?.id || obj.rpId, // Handles both rp.id and top-level rpId from server
-    },
-  };
-
   if (isRegistration) {
-    options.user = {
-      id: normalizeBase64URL(obj.user.id),
-      name: obj.user.name || '',
-      displayName: obj.user.displayName || obj.user.name || ''
+    // Registration Options Structure
+    return {
+      challenge: normalizeBase64URL(obj.challenge),
+      timeout: Number(obj.timeout) || 60000,
+      rp: {
+        name: obj.rp?.name || 'StaffPro',
+        id: obj.rp?.id || obj.rpId,
+      },
+      user: {
+        id: normalizeBase64URL(obj.user.id),
+        name: obj.user.name || '',
+        displayName: obj.user.displayName || obj.user.name || ''
+      },
+      pubKeyCredParams: (obj.pubKeyCredParams || []).map((p: any) => ({
+        type: 'public-key',
+        alg: Number(p.alg)
+      })),
+      attestation: 'none',
+      authenticatorSelection: obj.authenticatorSelection,
+      excludeCredentials: (obj.excludeCredentials || []).map((c: any) => ({
+        id: normalizeBase64URL(c.id),
+        type: 'public-key'
+      }))
     };
-    options.pubKeyCredParams = (obj.pubKeyCredParams || []).map((p: any) => ({
-      type: 'public-key',
-      alg: Number(p.alg)
-    }));
-    options.attestation = 'none'; // Platform authenticators often lack verifiable hardware roots
-    if (obj.authenticatorSelection) {
-      options.authenticatorSelection = obj.authenticatorSelection;
-    }
   } else {
-    if (obj.allowCredentials) {
-      options.allowCredentials = (obj.allowCredentials || []).map((c: any) => ({
+    // Authentication (Assertion) Options Structure
+    return {
+      challenge: normalizeBase64URL(obj.challenge),
+      timeout: Number(obj.timeout) || 60000,
+      rpId: obj.rpId || obj.rp?.id, // Top level rpId required for Assertion
+      allowCredentials: (obj.allowCredentials || []).map((c: any) => ({
         id: normalizeBase64URL(c.id),
         type: 'public-key',
         transports: c.transports
-      }));
-    }
-    options.userVerification = obj.userVerification || 'preferred';
+      })),
+      userVerification: obj.userVerification || 'preferred'
+    };
   }
-
-  return options;
 }
 
 function getDeviceName(): string {
@@ -249,11 +254,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(result.purpose || 'Passkey verification failed.');
       }
     } catch (error: any) {
-      console.error('PASSKEY: Error:', error);
+      console.error('PASSKEY: Error details:', error);
       let errorMessage = error.message || 'Could not sign in with passkey.';
       
       if (error.name === 'SecurityError') {
-        errorMessage = 'Security Error: The Relying Party ID (rpId) from the server must match the current domain. Check your server-side configuration.';
+        errorMessage = 'Security Error: The Relying Party ID (rpId) from the server must match the current domain.';
       } else if (error.name === 'NotAllowedError') {
         errorMessage = 'Passkey authentication was cancelled or blocked by the browser.';
       } else if (error.name === 'NotSupportedError') {

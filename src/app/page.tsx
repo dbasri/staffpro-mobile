@@ -29,6 +29,7 @@ function MainPage() {
   
   // Clean up URL parameters immediately after successful authentication 
   // to prevent re-triggering verification or "back-button" re-entry loops.
+  // Using router.replace ensures we don't trigger full page reloads that clear the console.
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
       router.replace('/');
@@ -46,8 +47,6 @@ function MainPage() {
 
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut) {
-      // Use router.replace instead of window.location.assign to prevent 
-      // full page reloads that clear the console and toast messages.
       router.replace('/login');
     }
   }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut, router]);

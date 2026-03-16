@@ -40,7 +40,7 @@ export const AuthApi = {
       return JSON.parse(cleanJson);
     } catch (e: any) {
       console.error('AUTH: Failed to parse server response:', text);
-      throw new Error(`JSON Parse Error: ${e.message}. Raw response: ${text.substring(0, 100)}...`);
+      throw new Error(`JSON Parse Error: ${e.message}. See console for raw response.`);
     }
   },
 
@@ -88,7 +88,7 @@ export const AuthApi = {
       const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
         method: 'POST',
         mode: 'cors',
-        credentials: 'include', // Ensures PHPSESSID is sent back
+        credentials: 'include',
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
