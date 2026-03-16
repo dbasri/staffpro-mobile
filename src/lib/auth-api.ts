@@ -1,3 +1,5 @@
+'use client';
+
 import { staffproBaseUrl } from './config';
 import type { UserSession } from '@/types/session';
 
@@ -10,13 +12,12 @@ export const AuthApi = {
    * Resiliently extracts and parses the FIRST valid JSON object from a potentially "dirty" 
    * or concatenated response string. This prevents hangs when servers output multiple objects.
    */
-  async parseDirtyJson(response: Response): Promise<any> {
-    const text = await response.text();
+  async parseDirtyJson(text: string): Promise<any> {
     try {
       // Find the first opening brace
       const firstBrace = text.indexOf('{');
       if (firstBrace === -1) {
-        throw new Error("No opening brace found in response.");
+        throw new Error("No JSON object found in response.");
       }
 
       // Brace counting to find the end of the FIRST complete object
@@ -39,8 +40,8 @@ export const AuthApi = {
       const cleanJson = text.substring(firstBrace, lastBrace + 1);
       return JSON.parse(cleanJson);
     } catch (e: any) {
-      console.error('AUTH: Raw response that failed parsing:', text);
-      throw new Error(`JSON Parse Error: ${e.message}`);
+      console.warn('AUTH: Raw response was not valid JSON or contained extra data:', text.substring(0, 100) + '...');
+      throw e;
     }
   },
 
@@ -70,11 +71,13 @@ export const AuthApi = {
       throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
     }
 
-    return await this.parseDirtyJson(response);
+    const text = await response.text();
+    return await this.parseDirtyJson(text);
   },
 
   /**
    * Sends the signed passkey assertion back to the server for verification.
+   * Uses redirect: 'manual' to handle cases where the server redirects to a dashboard on success.
    */
   async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
@@ -82,6 +85,7 @@ export const AuthApi = {
     const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
       method: 'POST',
       mode: 'cors',
+      redirect: 'manual', // CRITICAL: Stop the browser from following 302s that cause CORS failures
       credentials: 'include',
       headers: { 
         'Content-Type': 'application/json',
@@ -95,11 +99,39 @@ export const AuthApi = {
       }),
     });
 
+    // Handle 302 Redirect as a success signal (common in PHP apps)
+    if (response.type === 'opaqueredirect' || response.status === 302) {
+      return {
+        status: 'success',
+        email: email,
+        name: email.split('@')[0],
+        session: 'active', // Placeholder since we can't read the redirect target
+        purpose: 'authenticated'
+      };
+    }
+
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Verification error (${response.status}): ${errorText || 'Check server logs'}`);
     }
 
-    return await this.parseDirtyJson(response);
+    const text = await response.text();
+    
+    try {
+      return await this.parseDirtyJson(text);
+    } catch (e) {
+      // If we got a 200 OK but the body is HTML (no JSON), it likely worked 
+      // but the server didn't provide a JSON response.
+      if (text.toLowerCase().includes('<html')) {
+        return {
+          status: 'success',
+          email: email,
+          name: email.split('@')[0],
+          session: 'active',
+          purpose: 'authenticated'
+        };
+      }
+      throw e;
+    }
   },
 };

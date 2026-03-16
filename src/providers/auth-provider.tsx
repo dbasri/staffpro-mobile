@@ -179,7 +179,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const deviceName = getDeviceName();
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
-      // The server might return the options directly or wrapped in a publicKey key
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       
@@ -188,7 +187,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       let credentialResponse;
-      // registration options have a 'user' property, login (assertion) does not
       const isRegistration = !!(options.user && options.user.id);
       
       if (isRegistration) {
@@ -213,6 +211,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         errorMessage = 'Domain mismatch: The rpId from server must match or be a suffix of ' + window.location.hostname;
       } else if (error.name === 'NotAllowedError') {
         errorMessage = 'Authentication timed out or was cancelled.';
+      } else if (error.name === 'AbortError') {
+        errorMessage = 'Operation aborted by browser.';
       }
 
       setAuthError('auth-failed');
