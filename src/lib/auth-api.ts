@@ -5,41 +5,33 @@ import type { UserSession } from '@/types/session';
 
 /**
  * Surgically extracts the first valid JSON object from a string that may contain 
- * concatenated data, trailing junk, or multiple JSON objects.
+ * trailing characters, HTML, or multiple JSON objects.
  */
-async function parseFirstJsonObject(text: string) {
-  try {
-    // Attempt standard parse first
-    return JSON.parse(text);
-  } catch (e) {
-    let depth = 0;
-    let firstBrace = text.indexOf('{');
-    if (firstBrace === -1) {
-      console.error('DIAGNOSTIC: No JSON object found in response text');
-      throw e;
-    }
+function parseFirstJsonObject(text: string) {
+  const start = text.indexOf('{');
+  if (start === -1) {
+    console.error('DIAGNOSTIC: No JSON object found in response text');
+    throw new Error('Invalid server response: No JSON found');
+  }
+  
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') depth--;
     
-    for (let i = firstBrace; i < text.length; i++) {
-      if (text[i] === '{') depth++;
-      else if (text[i] === '}') depth--;
-      
-      if (depth === 0) {
-        const jsonCandidate = text.substring(firstBrace, i + 1);
-        try {
-          return JSON.parse(jsonCandidate);
-        } catch (innerError) {
-          console.error('DIAGNOSTIC: Failed to parse extracted JSON block:', jsonCandidate);
-          throw innerError;
-        }
+    if (depth === 0) {
+      const jsonCandidate = text.substring(start, i + 1);
+      try {
+        return JSON.parse(jsonCandidate);
+      } catch (e) {
+        console.error('DIAGNOSTIC: Failed to parse extracted JSON block:', jsonCandidate);
+        throw e;
       }
     }
-    throw e;
   }
+  throw new Error('Invalid server response: Incomplete JSON');
 }
 
-/**
- * Service to handle communications with the StaffPro authentication endpoints.
- */
 export const AuthApi = {
   /**
    * Fetches the WebAuthn authentication options from the server.
@@ -63,13 +55,8 @@ export const AuthApi = {
         }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Server error (${response.status}): ${errorText}`);
-      }
-
       const text = await response.text();
-      return await parseFirstJsonObject(text);
+      return parseFirstJsonObject(text);
     } catch (error) {
       console.error('DIAGNOSTIC ERROR: [AuthApi] Fetch options failed:', error);
       throw error;
@@ -99,13 +86,8 @@ export const AuthApi = {
         }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Verification error (${response.status}): ${errorText}`);
-      }
-
       const text = await response.text();
-      return await parseFirstJsonObject(text);
+      return parseFirstJsonObject(text);
     } catch (error) {
       console.error('DIAGNOSTIC ERROR: [AuthApi] Verification failed:', error);
       throw error;

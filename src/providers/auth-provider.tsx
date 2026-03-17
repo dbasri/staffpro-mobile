@@ -31,41 +31,28 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
- * Surgically converts standard Base64 (with optional PHP markers) to URL-safe Base64URL.
+ * Normalizes standard Base64 to URL-safe Base64URL.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
-  
-  // Strip PHP binary markers if present
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
-  
-  // Standard Base64 to URL-safe Base64URL (no padding)
-  return cleanStr
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
+  return cleanStr.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 /**
- * Deeply normalizes WebAuthn options to ensure challenge and binary IDs are clean Base64URL strings.
+ * Recursively normalizes binary fields in WebAuthn options.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
-
-  if (Array.isArray(obj)) {
-    return obj.map(prepareWebAuthnOptions);
-  }
+  if (Array.isArray(obj)) return obj.map(prepareWebAuthnOptions);
 
   const normalized: any = {};
   for (const key in obj) {
     const val = obj[key];
-    // Normalize specific binary-safe keys
-    if (['challenge', 'id'].includes(key)) {
-      normalized[key] = typeof val === 'string' ? normalizeBase64URL(val) : val;
-    } else if (typeof val === 'object' && val !== null) {
-      normalized[key] = prepareWebAuthnOptions(val);
+    if (['challenge', 'id'].includes(key) && typeof val === 'string') {
+      normalized[key] = normalizeBase64URL(val);
     } else {
-      normalized[key] = val;
+      normalized[key] = prepareWebAuthnOptions(val);
     }
   }
   return normalized;
@@ -76,8 +63,6 @@ function getDeviceName(): string {
   const ua = window.navigator.userAgent;
   if (/iPad|iPhone|iPod/.test(ua)) return 'iOS Device';
   if (/Android/.test(ua)) return 'Android Device';
-  if (/Macintosh/.test(ua)) return 'Mac';
-  if (/Windows/.test(ua)) return 'Windows PC';
   return 'Mobile Browser';
 }
 
@@ -134,12 +119,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       
-      if (status === 'success') {
-        const isActuallyAuthenticated = purpose === 'authenticated' || (purpose.includes('verify') && !purpose.includes('email'));
-        if (isActuallyAuthenticated) {
-          const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
-          loginRef.current({ ...data, email, method: 'code' });
-        }
+      if (status === 'success' && (purpose === 'authenticated' || (purpose.includes('verify') && !purpose.includes('email')))) {
+        const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
+        loginRef.current({ ...data, email, method: 'code' });
       } else if (status === 'fail') {
         setAuthError('invalid-code');
       }
@@ -168,57 +150,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const deviceName = getDeviceName();
     
     try {
-      console.log('DIAGNOSTIC: Requesting options for:', email);
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
-      
-      // Normalize the entire response recursively
       const normalized = prepareWebAuthnOptions(responseData);
-      
-      // The library expects the INNER options object (PublicKeyCredentialCreationOptions or PublicKeyCredentialRequestOptions)
       const options = normalized.publicKey || normalized;
-      
-      console.log('DIAGNOSTIC: Options Normalized. Structure:', options);
-      
-      // Determine if Registration or Authentication
       const isRegistration = !!(options.user && options.user.id);
       
       let credentialResponse;
       if (isRegistration) {
-        console.log('DIAGNOSTIC: Calling startRegistration...');
         credentialResponse = await startRegistration(options);
       } else {
-        console.log('DIAGNOSTIC: Calling startAuthentication...');
         credentialResponse = await startAuthentication(options);
       }
       
-      console.log('DIAGNOSTIC: Credential received, verifying with server...');
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
-        const sessionData = { 
-          ...result, 
-          email: result.email || email, 
-          method: 'passkey' 
-        };
-        login(sessionData as UserSession);
+        login({ ...result, email: result.email || email, method: 'passkey' } as UserSession);
         router.replace('/');
       } else {
         throw new Error(result.purpose || 'Verification failed.');
       }
     } catch (error: any) {
       console.error('DIAGNOSTIC ERROR: [AuthProvider] Authentication Error:', error);
-      let errorMessage = error.message || 'Could not sign in with passkey.';
-      
-      if (error.name === 'SecurityError') {
-        errorMessage = 'Domain mismatch: RP ID does not match the current origin.';
-      } else if (error.name === 'NotAllowedError') {
-        errorMessage = 'Authentication timed out or was cancelled by user.';
-      }
-
       setAuthError('auth-failed');
       toast({
         title: 'Authentication Failed',
-        description: errorMessage,
+        description: error.message || 'Could not sign in with passkey.',
         variant: 'destructive',
       });
     }

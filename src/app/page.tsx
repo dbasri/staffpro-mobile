@@ -44,7 +44,7 @@ function MainPage() {
   }, [isLoggingOut, logout]);
 
   useEffect(() => {
-    // DIAGNOSTIC: Block automatic redirect to login if we are displaying an error or verifying.
+    // Redirection logic: ONLY redirect to login if we are NOT verifying, NOT logging out, AND have no auth error.
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
       router.replace('/login');
     }
@@ -93,7 +93,31 @@ function MainPage() {
     return <GlobalLoader />;
   }
 
-  if (url === null && !isAuthenticated && !authError) {
+  // If we have an auth error, we MUST stay on this page to display it.
+  if (authError) {
+    return (
+      <main className="relative h-dvh w-full overflow-hidden bg-background flex items-center justify-center p-6 text-center">
+        <div className="max-w-sm space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+            <AlertCircle className="h-8 w-8 text-destructive" />
+          </div>
+          <h2 className="text-2xl font-bold text-destructive">Sign In Failed</h2>
+          <p className="text-muted-foreground">
+            {authError === 'auth-failed' 
+              ? 'Passkey authentication failed. Please check the console for detailed diagnostic logs.' 
+              : authError === 'invalid-code' 
+                ? 'The verification code provided is invalid or has expired.'
+                : 'An unexpected error occurred during the login process.'}
+          </p>
+          <Button onClick={handleBackToLogin} className="w-full">
+            Back to Login
+          </Button>
+        </div>
+      </main>
+    );
+  }
+
+  if (url === null && !isAuthenticated) {
       return <GlobalLoader />;
   }
   
@@ -126,25 +150,6 @@ function MainPage() {
             <LogOut className="h-4 w-4" />
             Sign Out
           </Button>
-        </div>
-      )}
-
-      {authError && authError !== 'invalid-code' && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/90 p-6 text-center backdrop-blur-sm">
-          <div className="max-w-sm space-y-4">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
-              <AlertCircle className="h-8 w-8 text-destructive" />
-            </div>
-            <h2 className="text-2xl font-bold text-destructive">Sign In Failed</h2>
-            <p className="text-muted-foreground">
-              {authError === 'auth-failed' 
-                ? 'Authentication timed out or was cancelled. Please check the console for diagnostics.' 
-                : 'An unexpected error occurred during the login process.'}
-            </p>
-            <Button onClick={handleBackToLogin} className="w-full">
-              Try Again
-            </Button>
-          </div>
         </div>
       )}
     </main>
