@@ -5,15 +5,10 @@ import type { UserSession } from '@/types/session';
 
 /**
  * Surgically extracts the first valid JSON object from a string.
- * This handles cases where the server appends extra characters, HTML, 
- * or multiple JSON objects by counting braces to find a complete object.
- * This also prevents 60s hangs if the server stream stays open.
  */
-function parseDirtyJson(text: string) {
+function parseFirstJson(text: string) {
   const start = text.indexOf('{');
-  if (start === -1) {
-    throw new Error('No JSON object found in response');
-  }
+  if (start === -1) return null;
 
   let depth = 0;
   let inString = false;
@@ -42,84 +37,74 @@ function parseDirtyJson(text: string) {
       else if (char === '}') depth--;
       
       if (depth === 0) {
-        const jsonCandidate = text.substring(start, i + 1);
         try {
-          return JSON.parse(jsonCandidate);
+          return JSON.parse(text.substring(start, i + 1));
         } catch (e) {
-          console.error('DIAGNOSTIC: Failed to parse extracted block:', jsonCandidate);
-          throw e;
+          return null;
         }
       }
     }
   }
-  throw new Error('Incomplete JSON object in response');
+  return null;
+}
+
+/**
+ * Fetches JSON from a server that might not close the connection or appends junk.
+ * It reads the stream and returns as soon as a valid JSON object is found.
+ */
+async function fetchSurgically(url: string, options: RequestInit) {
+  const response = await fetch(url, options);
+  if (!response.body) throw new Error('No response body');
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let accumulated = '';
+  
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      accumulated += decoder.decode(value, { stream: true });
+      
+      const json = parseFirstJson(accumulated);
+      if (json) {
+        // We found our object! Cancel the reader to stop the server stream.
+        await reader.cancel();
+        return json;
+      }
+    }
+    // Fallback if the stream ends without a match
+    return JSON.parse(accumulated);
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 export const AuthApi = {
-  /**
-   * Fetches the WebAuthn authentication options from the server.
-   */
   async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
-    
     console.log('DIAGNOSTIC: [AuthApi] Fetching passkey options for:', email);
     
-    try {
-      const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
-        method: 'POST',
-        mode: 'cors',
-        credentials: 'include',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ 
-          origin: origin,
-          email: email,
-          deviceName: deviceName
-        }),
-      });
-
-      const text = await response.text();
-      console.log('DIAGNOSTIC: [AuthApi] Options response received. Parsing...');
-      return parseDirtyJson(text);
-    } catch (error) {
-      console.error('DIAGNOSTIC ERROR: [AuthApi] Fetch options failed:', error);
-      throw error;
-    }
+    return fetchSurgically(`${staffproBaseUrl}?passkey=options`, {
+      method: 'POST',
+      mode: 'cors',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin, email, deviceName }),
+    });
   },
 
-  /**
-   * Sends the signed passkey assertion back to the server for verification.
-   */
   async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
+    console.log('DIAGNOSTIC: [AuthApi] Verifying passkey assertion...');
 
-    console.log('DIAGNOSTIC: [AuthApi] Verifying passkey with server...');
-
-    try {
-      const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
-        method: 'POST',
-        mode: 'cors',
-        credentials: 'include',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          assertion,
-          origin: origin,
-          email: email,
-          deviceName: deviceName
-        }),
-      });
-
-      const text = await response.text();
-      console.log('DIAGNOSTIC: [AuthApi] Verification response received');
-      return parseDirtyJson(text);
-    } catch (error) {
-      console.error('DIAGNOSTIC ERROR: [AuthApi] Verification failed:', error);
-      throw error;
-    }
+    return fetchSurgically(`${staffproBaseUrl}?passkey=verify`, {
+      method: 'POST',
+      mode: 'cors',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assertion, origin, email, deviceName }),
+    });
   },
 };

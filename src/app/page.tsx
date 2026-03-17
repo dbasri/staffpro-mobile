@@ -27,7 +27,6 @@ function MainPage() {
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
-  // Clean up URL parameters immediately after successful authentication using client-side router
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
       router.replace('/');
@@ -44,8 +43,6 @@ function MainPage() {
   }, [isLoggingOut, logout]);
 
   useEffect(() => {
-    // Redirection logic: ONLY redirect to login if we are NOT verifying, NOT logging out, AND have no auth error.
-    // If authError exists, we stay here to display the diagnostic info and preserve console logs.
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
       router.replace('/login');
     }
@@ -94,7 +91,6 @@ function MainPage() {
     return <GlobalLoader />;
   }
 
-  // Display authentication errors clearly and prevent automatic redirects
   if (authError) {
     return (
       <main className="relative h-dvh w-full overflow-hidden bg-background flex items-center justify-center p-6 text-center">
@@ -103,12 +99,10 @@ function MainPage() {
             <AlertCircle className="h-8 w-8 text-destructive" />
           </div>
           <h2 className="text-2xl font-bold text-destructive">Authentication Error</h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {authError === 'auth-failed' 
-              ? 'The passkey flow was interrupted or the device is not registered. Check the console for diagnostic details.' 
-              : authError === 'invalid-code' 
-                ? 'The verification code provided is invalid or has expired.'
-                : 'An unexpected error occurred.'}
+              ? 'The passkey flow was interrupted or timed out. Check the console for details.' 
+              : 'The verification process could not be completed.'}
           </p>
           <Button onClick={handleBackToLogin} className="w-full">
             Return to Login
@@ -126,7 +120,7 @@ function MainPage() {
     <main className="relative h-dvh w-full overflow-hidden">
       {url && (
         <WebView 
-          key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${isVerifying ? 'verify' : 'main'}-${isLoggingOut ? 'logout' : 'active'}`} 
+          key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}`} 
           url={url} 
         />
       )}

@@ -30,21 +30,12 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
-/**
- * Normalizes standard Base64 to URL-safe Base64URL.
- */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
-  // Handle PHP/Server binary wrapping (=?BINARY?B?...?=)
   let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
-  // Swap standard Base64 chars for URL-safe ones and remove padding
   return cleanStr.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
-/**
- * Recursively normalizes binary fields in WebAuthn options objects.
- * This is critical for nested fields like allowCredentials[].id
- */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) return obj.map(prepareWebAuthnOptions);
@@ -52,7 +43,6 @@ function prepareWebAuthnOptions(obj: any): any {
   const normalized: any = {};
   for (const key in obj) {
     const val = obj[key];
-    // Fields that are typically base64 encoded binaries needing URL-safe normalization
     if (['challenge', 'id'].includes(key) && typeof val === 'string') {
       normalized[key] = normalizeBase64URL(val);
     } else {
@@ -79,18 +69,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   const login = useCallback((sessionData: UserSession) => {
-    console.log('DIAGNOSTIC: [AuthProvider] Finalizing login for:', sessionData.email);
     setUser(sessionData);
     setAuthError(null);
     try {
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
-    } catch (error) {
-      console.error('DIAGNOSTIC ERROR: Failed to save session to storage');
-    }
+    } catch (error) {}
   }, []);
 
   const logout = useCallback(() => {
-    console.log('DIAGNOSTIC: [AuthProvider] Logging out');
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
     } catch (error) {}
@@ -119,20 +105,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (!data || typeof data !== 'object') return;
 
-      const status = data.status ? String(data.status).toLowerCase() : '';
-      const purpose = data.purpose ? String(data.purpose).toLowerCase() : '';
-
-      if (status === 'logoff' || purpose === 'logoff') {
-        logoutRef.current();
-        return;
-      }
-      
-      if (status === 'success' && (purpose === 'authenticated' || (purpose.includes('verify') && !purpose.includes('email')))) {
-        console.log('DIAGNOSTIC: [AuthProvider] Success message received from WebView');
+      if (data.status === 'success' && data.purpose === 'authenticated') {
         const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
-        loginRef.current({ ...data, email, method: 'code' });
-      } else if (status === 'fail') {
-        setAuthError('invalid-code');
+        loginRef.current({ ...data, email });
+      } else if (data.status === 'fail' || data.purpose === 'logoff') {
+        logoutRef.current();
       }
     };
 
@@ -158,46 +135,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthError(null);
     const deviceName = getDeviceName();
     
-    console.log('DIAGNOSTIC: [AuthProvider] Initiating passkey flow...');
-    
     try {
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
-      
-      // The server might wrap options in a publicKey property
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       
-      console.log('DIAGNOSTIC: [AuthProvider] Normalized Options:', JSON.stringify(options, null, 2));
-      
-      // Determine if this is registration (new device) or authentication (known device)
       const isRegistration = !!(options.user && options.user.id);
-      
-      console.log('DIAGNOSTIC: [AuthProvider] Calling browser WebAuthn library:', isRegistration ? 'startRegistration' : 'startAuthentication');
+      console.log('DIAGNOSTIC: [AuthProvider] Invoking library:', isRegistration ? 'Registration' : 'Authentication');
       
       let credentialResponse;
       if (isRegistration) {
-        // simplewebauthn v13+ prefers { optionsJSON: ... } wrapper
         credentialResponse = await startRegistration({ optionsJSON: options });
       } else {
         credentialResponse = await startAuthentication({ optionsJSON: options });
       }
       
-      console.log('DIAGNOSTIC: [AuthProvider] Credential signature obtained. Verifying with server...');
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
-        console.log('DIAGNOSTIC: [AuthProvider] Login successful');
         login({ ...result, email: result.email || email, method: 'passkey' } as UserSession);
         router.replace('/');
       } else {
-        throw new Error(result.purpose || 'Server verification failed.');
+        throw new Error(result.purpose || 'Verification failed');
       }
     } catch (error: any) {
-      console.error('DIAGNOSTIC ERROR: [AuthProvider] Authentication Error:', error);
+      console.error('DIAGNOSTIC ERROR:', error);
       setAuthError('auth-failed');
       toast({
-        title: 'Sign In Error',
-        description: error.message || 'Passkey process was interrupted.',
+        title: 'Authentication Error',
+        description: error.message || 'The passkey flow was interrupted.',
         variant: 'destructive',
       });
     }
