@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
@@ -47,7 +46,6 @@ function MainPage() {
   useEffect(() => {
     // DIAGNOSTIC: Block automatic redirect to login if we are displaying an error or verifying.
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
-      console.log('AUTH: User not authenticated, redirecting to login');
       router.replace('/login');
     }
   }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut, authError, router]);
@@ -140,7 +138,7 @@ function MainPage() {
             <h2 className="text-2xl font-bold text-destructive">Sign In Failed</h2>
             <p className="text-muted-foreground">
               {authError === 'auth-failed' 
-                ? 'Authentication timed out or was cancelled. Please try again.' 
+                ? 'Authentication timed out or was cancelled. Please check the console for diagnostics.' 
                 : 'An unexpected error occurred during the login process.'}
             </p>
             <Button onClick={handleBackToLogin} className="w-full">

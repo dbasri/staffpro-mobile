@@ -1,8 +1,41 @@
-
 'use client';
 
 import { staffproBaseUrl } from './config';
 import type { UserSession } from '@/types/session';
+
+/**
+ * Surgically extracts the first valid JSON object from a string that may contain 
+ * concatenated data, trailing junk, or multiple JSON objects.
+ */
+async function parseFirstJsonObject(text: string) {
+  try {
+    // Attempt standard parse first
+    return JSON.parse(text);
+  } catch (e) {
+    let depth = 0;
+    let firstBrace = text.indexOf('{');
+    if (firstBrace === -1) {
+      console.error('DIAGNOSTIC: No JSON object found in response text');
+      throw e;
+    }
+    
+    for (let i = firstBrace; i < text.length; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') depth--;
+      
+      if (depth === 0) {
+        const jsonCandidate = text.substring(firstBrace, i + 1);
+        try {
+          return JSON.parse(jsonCandidate);
+        } catch (innerError) {
+          console.error('DIAGNOSTIC: Failed to parse extracted JSON block:', jsonCandidate);
+          throw innerError;
+        }
+      }
+    }
+    throw e;
+  }
+}
 
 /**
  * Service to handle communications with the StaffPro authentication endpoints.
@@ -13,8 +46,6 @@ export const AuthApi = {
    */
   async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
-    
-    console.log('DIAGNOSTIC: [AuthApi] Requesting options for:', email);
     
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
@@ -32,19 +63,15 @@ export const AuthApi = {
         }),
       });
 
-      console.log('DIAGNOSTIC: [AuthApi] Server responded with status:', response.status);
-
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Server error (${response.status}): ${errorText || 'Check server logs'}`);
+        throw new Error(`Server error (${response.status}): ${errorText}`);
       }
 
-      // Standard JSON parsing for clean server response
-      const data = await response.json();
-      console.log('DIAGNOSTIC: [AuthApi] Received options data:', data);
-      return data;
+      const text = await response.text();
+      return await parseFirstJsonObject(text);
     } catch (error) {
-      console.error('DIAGNOSTIC ERROR: [AuthApi] Fetch failed:', error);
+      console.error('DIAGNOSTIC ERROR: [AuthApi] Fetch options failed:', error);
       throw error;
     }
   },
@@ -54,8 +81,6 @@ export const AuthApi = {
    */
   async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
-
-    console.log('DIAGNOSTIC: [AuthApi] Verifying passkey assertion for:', email);
 
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
@@ -74,16 +99,13 @@ export const AuthApi = {
         }),
       });
 
-      console.log('DIAGNOSTIC: [AuthApi] Verification server responded with status:', response.status);
-
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Verification error (${response.status}): ${errorText || 'Check server logs'}`);
+        throw new Error(`Verification error (${response.status}): ${errorText}`);
       }
 
-      const data = await response.json();
-      console.log('DIAGNOSTIC: [AuthApi] Verification success data:', data);
-      return data;
+      const text = await response.text();
+      return await parseFirstJsonObject(text);
     } catch (error) {
       console.error('DIAGNOSTIC ERROR: [AuthApi] Verification failed:', error);
       throw error;

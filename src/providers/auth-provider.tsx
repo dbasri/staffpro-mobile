@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -48,7 +47,7 @@ function normalizeBase64URL(str: string): string {
 }
 
 /**
- * Deeply normalizes WebAuthn options to ensure challenge and id are clean Base64URL strings.
+ * Deeply normalizes WebAuthn options to ensure challenge and binary IDs are clean Base64URL strings.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -60,7 +59,8 @@ function prepareWebAuthnOptions(obj: any): any {
   const normalized: any = {};
   for (const key in obj) {
     const val = obj[key];
-    if (key === 'challenge' || key === 'id') {
+    // Normalize specific binary-safe keys
+    if (['challenge', 'id'].includes(key)) {
       normalized[key] = typeof val === 'string' ? normalizeBase64URL(val) : val;
     } else if (typeof val === 'object' && val !== null) {
       normalized[key] = prepareWebAuthnOptions(val);
@@ -78,7 +78,7 @@ function getDeviceName(): string {
   if (/Android/.test(ua)) return 'Android Device';
   if (/Macintosh/.test(ua)) return 'Mac';
   if (/Windows/.test(ua)) return 'Windows PC';
-  return 'Mobile/Web Browser';
+  return 'Mobile Browser';
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -90,23 +90,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   const login = useCallback((sessionData: UserSession) => {
-    console.log('DIAGNOSTIC: [AuthProvider] Finalizing login session:', sessionData);
     setUser(sessionData);
     setAuthError(null);
     try {
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
-    } catch (error) {
-      console.error('AUTH: Failed to persist session.');
-    }
+    } catch (error) {}
   }, []);
 
   const logout = useCallback(() => {
-    console.log('DIAGNOSTIC: [AuthProvider] Logging out');
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
-    } catch (error) {
-      console.error('AUTH: Error clearing storage:', error);
-    }
+    } catch (error) {}
     setUser(null);
     setAuthError(null);
     router.replace('/login');
@@ -140,17 +134,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       
-      if (status === 'fail' || (status === 'success' && (purpose.includes('invalid') || purpose.includes('error')))) {
-        setAuthError('invalid-code');
-        return;
-      }
-
       if (status === 'success') {
         const isActuallyAuthenticated = purpose === 'authenticated' || (purpose.includes('verify') && !purpose.includes('email'));
         if (isActuallyAuthenticated) {
           const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
           loginRef.current({ ...data, email, method: 'code' });
         }
+      } else if (status === 'fail') {
+        setAuthError('invalid-code');
       }
     };
 
@@ -173,33 +164,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const passkeyLogin = useCallback(async (email: string) => {
-    console.log('DIAGNOSTIC: [AuthProvider] Starting passkeyLogin for:', email);
+    setAuthError(null);
+    const deviceName = getDeviceName();
+    
     try {
-      setAuthError(null);
-      const deviceName = getDeviceName();
-      
+      console.log('DIAGNOSTIC: Requesting options for:', email);
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       
-      // Prepare options. We MUST pass the actual options object (contents of publicKey)
-      // to the simplewebauthn library to avoid "reading allowCredentials" TypeErrors.
-      const normalizedResponse = prepareWebAuthnOptions(responseData);
-      const options = normalizedResponse.publicKey || normalizedResponse;
+      // Normalize the entire response recursively
+      const normalized = prepareWebAuthnOptions(responseData);
       
-      console.log('DIAGNOSTIC: [AuthProvider] Final Options Structure:', options);
+      // The library expects the INNER options object (PublicKeyCredentialCreationOptions or PublicKeyCredentialRequestOptions)
+      const options = normalized.publicKey || normalized;
       
-      // Determine if registration or authentication
+      console.log('DIAGNOSTIC: Options Normalized. Structure:', options);
+      
+      // Determine if Registration or Authentication
       const isRegistration = !!(options.user && options.user.id);
       
       let credentialResponse;
       if (isRegistration) {
-        console.log('DIAGNOSTIC: [AuthProvider] Calling startRegistration...');
+        console.log('DIAGNOSTIC: Calling startRegistration...');
         credentialResponse = await startRegistration(options);
       } else {
-        console.log('DIAGNOSTIC: [AuthProvider] Calling startAuthentication...');
+        console.log('DIAGNOSTIC: Calling startAuthentication...');
         credentialResponse = await startAuthentication(options);
       }
       
-      console.log('DIAGNOSTIC: [AuthProvider] Credential received:', credentialResponse);
+      console.log('DIAGNOSTIC: Credential received, verifying with server...');
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
@@ -211,7 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login(sessionData as UserSession);
         router.replace('/');
       } else {
-        throw new Error(result.purpose || 'Passkey verification failed.');
+        throw new Error(result.purpose || 'Verification failed.');
       }
     } catch (error: any) {
       console.error('DIAGNOSTIC ERROR: [AuthProvider] Authentication Error:', error);
