@@ -45,7 +45,7 @@ function MainPage() {
 
   useEffect(() => {
     // Redirection logic: ONLY redirect to login if we are NOT verifying, NOT logging out, AND have no auth error.
-    // If authError exists, we stay here to display the diagnostic info.
+    // If authError exists, we stay here to display the diagnostic info and preserve console logs.
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
       router.replace('/login');
     }
@@ -94,7 +94,7 @@ function MainPage() {
     return <GlobalLoader />;
   }
 
-  // If we have an auth error, we MUST stay on this page to display it and preserve console logs.
+  // Display authentication errors clearly and prevent automatic redirects
   if (authError) {
     return (
       <main className="relative h-dvh w-full overflow-hidden bg-background flex items-center justify-center p-6 text-center">
@@ -102,16 +102,16 @@ function MainPage() {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
             <AlertCircle className="h-8 w-8 text-destructive" />
           </div>
-          <h2 className="text-2xl font-bold text-destructive">Sign In Failed</h2>
+          <h2 className="text-2xl font-bold text-destructive">Authentication Error</h2>
           <p className="text-muted-foreground">
             {authError === 'auth-failed' 
-              ? 'Passkey authentication failed. Please check the browser console for detailed diagnostic logs.' 
+              ? 'The passkey flow was interrupted or the device is not registered. Check the console for diagnostic details.' 
               : authError === 'invalid-code' 
                 ? 'The verification code provided is invalid or has expired.'
-                : 'An unexpected error occurred during the login process.'}
+                : 'An unexpected error occurred.'}
           </p>
           <Button onClick={handleBackToLogin} className="w-full">
-            Back to Login
+            Return to Login
           </Button>
         </div>
       </main>

@@ -7,6 +7,7 @@ import type { UserSession } from '@/types/session';
  * Surgically extracts the first valid JSON object from a string.
  * This handles cases where the server appends extra characters, HTML, 
  * or multiple JSON objects by counting braces to find a complete object.
+ * This also prevents 60s hangs if the server stream stays open.
  */
 function parseDirtyJson(text: string) {
   const start = text.indexOf('{');
@@ -79,10 +80,8 @@ export const AuthApi = {
         }),
       });
 
-      // Using text() and manual extraction prevents the browser from hanging 
-      // if the server connection stays open after sending the JSON object.
       const text = await response.text();
-      console.log('DIAGNOSTIC: [AuthApi] Options response text received (length):', text.length);
+      console.log('DIAGNOSTIC: [AuthApi] Options response received. Parsing...');
       return parseDirtyJson(text);
     } catch (error) {
       console.error('DIAGNOSTIC ERROR: [AuthApi] Fetch options failed:', error);
@@ -96,7 +95,7 @@ export const AuthApi = {
   async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
 
-    console.log('DIAGNOSTIC: [AuthApi] Verifying passkey for:', email);
+    console.log('DIAGNOSTIC: [AuthApi] Verifying passkey with server...');
 
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
@@ -116,7 +115,7 @@ export const AuthApi = {
       });
 
       const text = await response.text();
-      console.log('DIAGNOSTIC: [AuthApi] Verification response text received');
+      console.log('DIAGNOSTIC: [AuthApi] Verification response received');
       return parseDirtyJson(text);
     } catch (error) {
       console.error('DIAGNOSTIC ERROR: [AuthApi] Verification failed:', error);
