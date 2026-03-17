@@ -96,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {}
     setUser(null);
     setAuthError(null);
+    // Use router.replace to avoid full page reloads that clear the console
     router.replace('/login');
   }, [router]);
 
@@ -166,8 +167,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('DIAGNOSTIC: [AuthProvider] Options received. Normalizing...');
       
       const normalized = prepareWebAuthnOptions(responseData);
-      // The options object should be the publicKey value or the whole object if not wrapped
+      // Ensure we extract the inner publicKey options if the server wrapped it
       const options = normalized.publicKey || normalized;
+      
+      console.log('DIAGNOSTIC: [AuthProvider] Final normalized options:', JSON.stringify(options, null, 2));
       
       const isRegistration = !!(options.user && options.user.id);
       console.log('DIAGNOSTIC: [AuthProvider] Calling WebAuthn library:', isRegistration ? 'startRegistration' : 'startAuthentication');

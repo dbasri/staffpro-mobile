@@ -79,8 +79,10 @@ export const AuthApi = {
         }),
       });
 
+      // Using text() and manual extraction prevents the browser from hanging 
+      // if the server connection stays open after sending the JSON object.
       const text = await response.text();
-      console.log('DIAGNOSTIC: [AuthApi] Options response received (length):', text.length);
+      console.log('DIAGNOSTIC: [AuthApi] Options response text received (length):', text.length);
       return parseDirtyJson(text);
     } catch (error) {
       console.error('DIAGNOSTIC ERROR: [AuthApi] Fetch options failed:', error);
@@ -114,7 +116,7 @@ export const AuthApi = {
       });
 
       const text = await response.text();
-      console.log('DIAGNOSTIC: [AuthApi] Verification response received');
+      console.log('DIAGNOSTIC: [AuthApi] Verification response text received');
       return parseDirtyJson(text);
     } catch (error) {
       console.error('DIAGNOSTIC ERROR: [AuthApi] Verification failed:', error);
