@@ -27,7 +27,7 @@ function MainPage() {
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
-  // Clean up URL parameters immediately after successful authentication
+  // Clean up URL parameters immediately after successful authentication using client-side router
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
       router.replace('/');
@@ -45,6 +45,7 @@ function MainPage() {
 
   useEffect(() => {
     // Redirection logic: ONLY redirect to login if we are NOT verifying, NOT logging out, AND have no auth error.
+    // If authError exists, we stay here to display the diagnostic info.
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
       router.replace('/login');
     }
@@ -93,7 +94,7 @@ function MainPage() {
     return <GlobalLoader />;
   }
 
-  // If we have an auth error, we MUST stay on this page to display it.
+  // If we have an auth error, we MUST stay on this page to display it and preserve console logs.
   if (authError) {
     return (
       <main className="relative h-dvh w-full overflow-hidden bg-background flex items-center justify-center p-6 text-center">
@@ -104,7 +105,7 @@ function MainPage() {
           <h2 className="text-2xl font-bold text-destructive">Sign In Failed</h2>
           <p className="text-muted-foreground">
             {authError === 'auth-failed' 
-              ? 'Passkey authentication failed. Please check the console for detailed diagnostic logs.' 
+              ? 'Passkey authentication failed. Please check the browser console for detailed diagnostic logs.' 
               : authError === 'invalid-code' 
                 ? 'The verification code provided is invalid or has expired.'
                 : 'An unexpected error occurred during the login process.'}

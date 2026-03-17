@@ -4,32 +4,54 @@ import { staffproBaseUrl } from './config';
 import type { UserSession } from '@/types/session';
 
 /**
- * Surgically extracts the first valid JSON object from a string that may contain 
- * trailing characters, HTML, or multiple JSON objects.
+ * Surgically extracts the first valid JSON object from a string.
+ * This handles cases where the server appends extra characters, HTML, 
+ * or multiple JSON objects by counting braces to find a complete object.
  */
-function parseFirstJsonObject(text: string) {
+function parseDirtyJson(text: string) {
   const start = text.indexOf('{');
   if (start === -1) {
-    console.error('DIAGNOSTIC: No JSON object found in response text');
-    throw new Error('Invalid server response: No JSON found');
+    throw new Error('No JSON object found in response');
   }
-  
+
   let depth = 0;
+  let inString = false;
+  let escape = false;
+
   for (let i = start; i < text.length; i++) {
-    if (text[i] === '{') depth++;
-    else if (text[i] === '}') depth--;
+    const char = text[i];
     
-    if (depth === 0) {
-      const jsonCandidate = text.substring(start, i + 1);
-      try {
-        return JSON.parse(jsonCandidate);
-      } catch (e) {
-        console.error('DIAGNOSTIC: Failed to parse extracted JSON block:', jsonCandidate);
-        throw e;
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    
+    if (char === '\\') {
+      escape = true;
+      continue;
+    }
+    
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    
+    if (!inString) {
+      if (char === '{') depth++;
+      else if (char === '}') depth--;
+      
+      if (depth === 0) {
+        const jsonCandidate = text.substring(start, i + 1);
+        try {
+          return JSON.parse(jsonCandidate);
+        } catch (e) {
+          console.error('DIAGNOSTIC: Failed to parse extracted block:', jsonCandidate);
+          throw e;
+        }
       }
     }
   }
-  throw new Error('Invalid server response: Incomplete JSON');
+  throw new Error('Incomplete JSON object in response');
 }
 
 export const AuthApi = {
@@ -38,6 +60,8 @@ export const AuthApi = {
    */
   async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
+    
+    console.log('DIAGNOSTIC: [AuthApi] Fetching passkey options for:', email);
     
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=options`, {
@@ -56,7 +80,8 @@ export const AuthApi = {
       });
 
       const text = await response.text();
-      return parseFirstJsonObject(text);
+      console.log('DIAGNOSTIC: [AuthApi] Options response received (length):', text.length);
+      return parseDirtyJson(text);
     } catch (error) {
       console.error('DIAGNOSTIC ERROR: [AuthApi] Fetch options failed:', error);
       throw error;
@@ -68,6 +93,8 @@ export const AuthApi = {
    */
   async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
+
+    console.log('DIAGNOSTIC: [AuthApi] Verifying passkey for:', email);
 
     try {
       const response = await fetch(`${staffproBaseUrl}?passkey=verify`, {
@@ -87,7 +114,8 @@ export const AuthApi = {
       });
 
       const text = await response.text();
-      return parseFirstJsonObject(text);
+      console.log('DIAGNOSTIC: [AuthApi] Verification response received');
+      return parseDirtyJson(text);
     } catch (error) {
       console.error('DIAGNOSTIC ERROR: [AuthApi] Verification failed:', error);
       throw error;
