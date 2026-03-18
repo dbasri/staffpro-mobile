@@ -36,18 +36,31 @@ const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
  * Normalizes string inputs for WebAuthn.
- * Specifically handles the server's =?BINARY?B? markers and ensures URL-safe Base64.
+ * Specifically handles the server's =?BINARY?B? markers and double-encoded Base64.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
   
-  let content = str;
-  // Unwrap PHP binary markers
-  if (str.startsWith('=?BINARY?B?')) {
-    content = str.replace(/^=\?BINARY\?B?/, '').replace(/\?=$/, '').trim();
+  let content = str.trim();
+  // 1. Unwrap PHP binary markers
+  if (content.startsWith('=?BINARY?B?')) {
+    content = content.replace(/^=\?BINARY\?B?/, '').replace(/\?=$/, '').trim();
   }
 
-  // Convert to URL-safe Base64 (RFC 4648)
+  // 2. Resolve double-encoding
+  // If the content is Base64 encoded again (common in some middleware), decode it once.
+  // Standard credential IDs are usually 43-44 chars (for 32 bytes). 
+  // If we have 64+ chars with standard Base64 markers, it's double-encoded.
+  if (content.length > 44 && (content.includes('+') || content.includes('/') || content.endsWith('='))) {
+    try {
+      const decoded = atob(content);
+      if (decoded.length > 20) {
+        content = decoded;
+      }
+    } catch (e) {}
+  }
+
+  // 3. Final conversion to URL-safe Base64 (RFC 4648)
   return content
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -77,7 +90,6 @@ function prepareWebAuthnOptions(obj: any): any {
 
 /**
  * Improved device name extraction from User Agent.
- * Captures more specific model info for Android.
  */
 function getDeviceName(): string {
   if (typeof window === 'undefined') return 'Unknown Device';
@@ -86,11 +98,16 @@ function getDeviceName(): string {
   if (/iPhone/.test(ua)) return 'iPhone';
   if (/iPad/.test(ua)) return 'iPad';
   if (/Android/.test(ua)) {
-    // Attempt to extract hardware model like "Pixel 8 Pro" or "SM-G991B"
-    const androidMatch = ua.match(/Android\s+[^;]+;\s+([^;)]+)/);
-    if (androidMatch && androidMatch[1] && androidMatch[1] !== 'K') {
-      return androidMatch[1].trim();
+    // Look for common Android models to avoid generic "K" or "Build" identifiers
+    const modelMatch = ua.match(/Android\s+[^;]+;\s+([^;)]+)/);
+    if (modelMatch && modelMatch[1]) {
+      const model = modelMatch[1].trim();
+      if (model !== 'K' && !model.includes('Build/')) {
+        return model;
+      }
     }
+    if (/Samsung/i.test(ua)) return 'Samsung Device';
+    if (/Pixel/i.test(ua)) return 'Google Pixel';
     return 'Android Device';
   }
   if (/Windows NT/.test(ua)) return 'Windows PC';
@@ -187,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         credentialResponse = await startAuthentication({ optionsJSON: options });
       }
       
-      console.log('DIAGNOSTIC: [AuthProvider] Credential Response:', JSON.stringify(credentialResponse, null, 2));
+      console.log('DIAGNOSTIC: [AuthProvider] Credential Response received. Verifying with server...');
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
