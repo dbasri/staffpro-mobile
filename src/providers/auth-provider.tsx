@@ -35,45 +35,22 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
- * Surgically handles the server's binary markers and potential double-encoding.
- * Defensive against 'atob' failures by validating and padding the input.
+ * Normalizes binary fields (challenge, user.id, etc.) sent by the server.
+ * Surgically handles PHP binary markers and converts standard Base64 to URL-safe Base64.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
   
   let content = str.trim();
   
-  // 1. Unwrap PHP binary markers if present
+  // 1. Strip PHP binary markers if present
   if (content.startsWith('=?BINARY?B?')) {
     content = content.replace(/^=\?BINARY\?B?/, '').replace(/\?=$/, '').trim();
   }
 
-  // 2. Safely attempt to resolve potential double-encoding
-  if (content.length > 32) {
-    try {
-      // Normalize Base64URL to standard Base64 for atob
-      let toDecode = content.replace(/-/g, '+').replace(/_/g, '/');
-      
-      // Ensure correct padding for atob
-      while (toDecode.length % 4 !== 0) {
-        toDecode += '=';
-      }
-
-      // Only attempt atob if the characters are valid Base64
-      if (/^[A-Za-z0-9+/=]+$/.test(toDecode)) {
-        const decoded = atob(toDecode);
-        // Heuristic: If the result looks like a valid binary buffer (usually 32-128 bytes), use it
-        if (decoded.length >= 16 && decoded.length <= 512) {
-          content = decoded;
-        }
-      }
-    } catch (e) {
-      // If atob fails, we fallback to the original content (might be single-encoded)
-    }
-  }
-
-  // 3. Final conversion to URL-safe Base64 (RFC 4648) required by WebAuthn
-  // We remove padding as WebAuthn specifically expects unpadded Base64URL
+  // 2. Final conversion to URL-safe Base64 (RFC 4648) required by WebAuthn
+  // We replace standard Base64 characters and remove padding.
+  // We avoid 'atob' here to prevent encoding mismatch errors.
   return content
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -90,6 +67,7 @@ function prepareWebAuthnOptions(obj: any): any {
   const normalized: any = {};
   for (const key in obj) {
     const val = obj[key];
+    // These fields are expected to be binary-encoded as Base64URL
     const isBinaryField = ['challenge', 'id'].includes(key);
     
     if (isBinaryField && typeof val === 'string') {
@@ -102,26 +80,30 @@ function prepareWebAuthnOptions(obj: any): any {
 }
 
 /**
- * Extracts specific hardware model from Android User Agent.
+ * Extracts specific hardware model or OS version from User Agent.
  */
 function getDeviceName(): string {
   if (typeof window === 'undefined') return 'Unknown Device';
   const ua = window.navigator.userAgent;
   
-  if (/iPhone/.test(ua)) return 'iPhone';
-  if (/iPad/.test(ua)) return 'iPad';
+  if (/iPhone|iPad/.test(ua)) return 'Apple Device';
+  
   if (/Android/.test(ua)) {
     // Attempt to extract the hardware model (e.g., "Pixel 8", "SM-G991B")
-    const modelMatch = ua.match(/Android\s+[^;]+;\s+([^;)]+)/);
-    if (modelMatch && modelMatch[1]) {
-      const model = modelMatch[1].trim();
-      // Filter out generic keywords often found in truncated UAs
-      if (model.length > 1 && !/^(K|Build|Mobile|Version|Chrome|Safari)$/i.test(model)) {
-        return model;
+    const match = ua.match(/Android\s+([0-9.]+);\s+([^;)]+)/);
+    if (match) {
+      const version = match[1];
+      let model = match[2].split('Build/')[0].trim();
+      
+      // If the model name is generic (like "wv" or "K"), use a descriptive fallback
+      if (model.length < 2 || /^(Mobile|wv|K)$/i.test(model)) {
+        return `Android ${version} Device`;
       }
+      return model;
     }
     return 'Android Device';
   }
+  
   if (/Windows NT/.test(ua)) return 'Windows PC';
   if (/Macintosh/.test(ua)) return 'Mac';
   
@@ -197,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
+      // The server might return the options directly or wrapped in a publicKey object
       const rawOptions = responseData.publicKey || responseData;
       
       const options = prepareWebAuthnOptions(rawOptions);

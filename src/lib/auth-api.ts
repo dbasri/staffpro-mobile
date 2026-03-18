@@ -7,21 +7,22 @@ import type { UserSession } from '@/types/session';
  * Surgically extracts the first valid JSON object from a string.
  * Resilient against PHP warnings or trailing stream data.
  */
-function parseFirstJson(text: string) {
-  const start = text.indexOf('{');
+function parseFirstJson(accumulated: string) {
+  const start = accumulated.indexOf('{');
   if (start === -1) return null;
 
-  let end = text.lastIndexOf('}');
+  let end = accumulated.lastIndexOf('}');
   while (end > start) {
     try {
-      const jsonStr = text.substring(start, end + 1);
+      const jsonStr = accumulated.substring(start, end + 1);
       const parsed = JSON.parse(jsonStr);
+      // Ensure we have a valid object with expected status/purpose keys
       if (parsed && typeof parsed === 'object') {
         return parsed;
       }
-      end = text.lastIndexOf('}', end - 1);
+      end = accumulated.lastIndexOf('}', end - 1);
     } catch (e) {
-      end = text.lastIndexOf('}', end - 1);
+      end = accumulated.lastIndexOf('}', end - 1);
     }
   }
   return null;
@@ -54,12 +55,12 @@ async function fetchSurgically(url: string, options: RequestInit) {
       const { done, value } = await reader.read();
       
       if (value) {
-        const chunk = decoder.decode(value, { stream: true });
-        accumulated += chunk;
+        accumulated += decoder.decode(value, { stream: true });
         
         const json = parseFirstJson(accumulated);
         if (json) {
-          // CRITICAL: Force close the stream reader so the browser stops waiting
+          // CRITICAL: Immediately abort the stream once a valid JSON object is found.
+          // This stops the browser from waiting for the server's 60s idle timeout.
           await reader.cancel('JSON_FOUND').catch(() => {});
           return json;
         }
