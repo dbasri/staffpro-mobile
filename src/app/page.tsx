@@ -60,18 +60,20 @@ function MainPage() {
   };
   
   let url: string | null = null;
+  const storedEmail = typeof window !== 'undefined' ? localStorage.getItem('staffpro-verification-email') : '';
+  const currentEmail = user?.email || emailForVerification || storedEmail || '';
   
   if (isLoggingOut && user) {
     const params = new URLSearchParams({
       logoff: 'true',
-      email: user.email || '',
+      email: currentEmail,
       session: user.session,
     });
     url = `${staffproBaseUrl}?${params.toString()}`;
   } else if (isAuthenticated && user) {
     const params = new URLSearchParams({
       session: user.session,
-      email: user.email || '',
+      email: currentEmail,
       origin: typeof window !== 'undefined' ? window.location.origin : '',
     });
     url = `${staffproBaseUrl}?${params.toString()}`;
@@ -79,7 +81,7 @@ function MainPage() {
     if (!isAuthenticated) {
       const params = new URLSearchParams({
         verification: 'true',
-        email: emailForVerification,
+        email: currentEmail,
         origin: typeof window !== 'undefined' ? window.location.origin : '',
       });
       if (verificationCode) {

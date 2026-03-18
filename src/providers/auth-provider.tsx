@@ -32,23 +32,33 @@ const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
  * Handles the pattern "=?BINARY?B?...base64_data...?=" commonly used by PHP/LDAP.
- * If double-encoded, it decodes the content before normalizing to URL-safe Base64.
+ * Corrects double-encoding of strings and preserves raw bytes for the challenge.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
   
   let cleanStr = str;
   if (str.startsWith('=?BINARY?B?')) {
-    const b64Content = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
+    const b64 = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
+    // Ensure correct padding for atob
+    const paddedB64 = b64.padEnd(b64.length + (4 - (b64.length % 4)) % 4, '=');
+    
     try {
-      // Decode the marker content. If cThF... is sent, this yields q8EQ...
-      cleanStr = atob(b64Content);
+      const decoded = atob(paddedB64);
+      // If it's a printable Base64URL string (like your Credential ID), use it.
+      // If it's raw binary (like a challenge), use the original base64 part.
+      if (/^[A-Za-z0-9\-_]{10,}$/.test(decoded)) {
+        cleanStr = decoded;
+      } else {
+        cleanStr = b64;
+      }
     } catch (e) {
-      cleanStr = b64Content;
+      // atob failed, likely not base64. Use original b64 part.
+      cleanStr = b64;
     }
   }
   
-  // Ensure the final string is URL-safe and has no padding
+  // Convert standard Base64 to URL-safe Base64 and remove padding
   return cleanStr
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -66,8 +76,10 @@ function prepareWebAuthnOptions(obj: any): any {
   const normalized: any = {};
   for (const key in obj) {
     const val = obj[key];
-    // Binary fields are normalized to URL-safe Base64
-    if (['challenge', 'id'].includes(key) && typeof val === 'string') {
+    // List of known binary fields in WebAuthn that must be Base64URL
+    const isBinaryField = ['challenge', 'id'].includes(key);
+    
+    if (isBinaryField && typeof val === 'string') {
       normalized[key] = normalizeBase64URL(val);
     } else {
       normalized[key] = prepareWebAuthnOptions(val);
