@@ -33,7 +33,6 @@ function parseFirstJson(text: string) {
  * then immediately aborts the connection to prevent 60s hangs.
  */
 async function fetchSurgically(url: string, options: RequestInit) {
-  console.log(`DIAGNOSTIC: [AuthApi] Fetching: ${url}`);
   const response = await fetch(url, options);
   
   if (!response.ok) {
@@ -60,8 +59,7 @@ async function fetchSurgically(url: string, options: RequestInit) {
         
         const json = parseFirstJson(accumulated);
         if (json) {
-          console.log('DIAGNOSTIC: [AuthApi] Valid JSON detected! Aborting connection immediately.');
-          // CRITICAL: Force close the stream reader so the browser stops waiting for the server's 60s idle timeout.
+          // CRITICAL: Force close the stream reader so the browser stops waiting
           await reader.cancel('JSON_FOUND').catch(() => {});
           return json;
         }
