@@ -62,7 +62,10 @@ async function fetchSurgically(url: string, options: RequestInit) {
     throw new Error(`Server responded with status ${response.status}: ${errorText}`);
   }
 
-  if (!response.body) throw new Error('No response body');
+  if (!response.body) {
+    const text = await response.text();
+    return JSON.parse(text);
+  }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -71,20 +74,24 @@ async function fetchSurgically(url: string, options: RequestInit) {
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
       
-      const chunk = decoder.decode(value, { stream: true });
-      accumulated += chunk;
-      
-      const json = parseFirstJson(accumulated);
-      if (json) {
-        console.log('DIAGNOSTIC: [AuthApi] Valid JSON found! Aborting connection.');
-        // We found our object! Cancel the reader to stop the server stream.
-        await reader.cancel().catch(() => {});
-        return json;
+      if (value) {
+        const chunk = decoder.decode(value, { stream: true });
+        accumulated += chunk;
+        
+        const json = parseFirstJson(accumulated);
+        if (json) {
+          console.log('DIAGNOSTIC: [AuthApi] Valid JSON found! Aborting connection immediately.');
+          // Cancel the reader to stop the server stream and prevent the 60s hang
+          await reader.cancel('JSON_FOUND').catch(() => {});
+          return json;
+        }
       }
+
+      if (done) break;
     }
-    // Fallback if the stream ends without finding a complete object via brace counting
+    
+    // Fallback if the stream ends without a complete object
     return JSON.parse(accumulated);
   } finally {
     reader.releaseLock();

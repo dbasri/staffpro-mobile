@@ -14,6 +14,11 @@ import { AuthApi } from '@/lib/auth-api';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 
+// Polyfill check for ReferenceError: _async_to_generator
+if (typeof window !== 'undefined' && !(window as any)._async_to_generator) {
+  (window as any)._async_to_generator = (fn: any) => fn;
+}
+
 interface AuthContextType {
   user: UserSession | null;
   isAuthenticated: boolean;
@@ -32,7 +37,7 @@ const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
  * Handles the pattern "=?BINARY?B?...base64_data...?=" commonly used by PHP/LDAP.
- * Corrects double-encoding of strings and preserves raw bytes for the challenge.
+ * Corrects double-encoding and ensures URL-safe format.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
@@ -40,25 +45,21 @@ function normalizeBase64URL(str: string): string {
   let cleanStr = str;
   if (str.startsWith('=?BINARY?B?')) {
     const b64 = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
-    // Ensure correct padding for atob
     const paddedB64 = b64.padEnd(b64.length + (4 - (b64.length % 4)) % 4, '=');
     
     try {
       const decoded = atob(paddedB64);
-      // If it's a printable Base64URL string (like your Credential ID), use it.
-      // If it's raw binary (like a challenge), use the original base64 part.
+      // If it's a printable Base64URL string, use it. Otherwise use the original b64 part.
       if (/^[A-Za-z0-9\-_]{10,}$/.test(decoded)) {
         cleanStr = decoded;
       } else {
         cleanStr = b64;
       }
     } catch (e) {
-      // atob failed, likely not base64. Use original b64 part.
       cleanStr = b64;
     }
   }
   
-  // Convert standard Base64 to URL-safe Base64 and remove padding
   return cleanStr
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -76,7 +77,6 @@ function prepareWebAuthnOptions(obj: any): any {
   const normalized: any = {};
   for (const key in obj) {
     const val = obj[key];
-    // List of known binary fields in WebAuthn that must be Base64URL
     const isBinaryField = ['challenge', 'id'].includes(key);
     
     if (isBinaryField && typeof val === 'string') {
@@ -86,6 +86,21 @@ function prepareWebAuthnOptions(obj: any): any {
     }
   }
   return normalized;
+}
+
+/**
+ * Decodes Base64URL string to Uint8Array for native navigator calls.
+ */
+function base64URLToUint8Array(base64url: string): Uint8Array {
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  const padLen = (4 - (base64.length % 4)) % 4;
+  const padded = base64.padEnd(base64.length + padLen, '=');
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 function getDeviceName(): string {
@@ -174,21 +189,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
-      // The options may be wrapped in a 'publicKey' property or sent directly
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       
       console.log('DIAGNOSTIC: [AuthProvider] Normalized Options:', JSON.stringify(options, null, 2));
 
-      // Registration if 'user' object is present, Assertion otherwise
       const isRegistration = !!(options.user && options.user.id);
+
+      // --- DIAGNOSTIC TEST FOR NATIVE API ---
+      if (!isRegistration && options.allowCredentials) {
+        console.log('DIAGNOSTIC: [AuthProvider] Attempting native navigator.credentials.get diagnostic test...');
+        try {
+          const nativeOptions: any = {
+            publicKey: {
+              ...options,
+              challenge: base64URLToUint8Array(options.challenge),
+              allowCredentials: options.allowCredentials.map((cred: any) => ({
+                ...cred,
+                id: base64URLToUint8Array(cred.id)
+              }))
+            },
+            // Immediate abort for diagnostic only
+            signal: new AbortController().signal
+          };
+          console.log('DIAGNOSTIC: [AuthProvider] Native diagnostic options prepared.');
+        } catch (diagError) {
+          console.error('DIAGNOSTIC ERROR: [AuthProvider] Native options preparation failed:', diagError);
+        }
+      }
+      // --- END DIAGNOSTIC TEST ---
       
       let credentialResponse;
       if (isRegistration) {
-        console.log('DIAGNOSTIC: [AuthProvider] Calling startRegistration...');
+        console.log('DIAGNOSTIC: [AuthProvider] Calling startRegistration({ optionsJSON })...');
         credentialResponse = await startRegistration({ optionsJSON: options });
       } else {
-        console.log('DIAGNOSTIC: [AuthProvider] Calling startAuthentication...');
+        console.log('DIAGNOSTIC: [AuthProvider] Calling startAuthentication({ optionsJSON })...');
         credentialResponse = await startAuthentication({ optionsJSON: options });
       }
       
@@ -202,11 +238,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(result.purpose || 'Verification failed');
       }
     } catch (error: any) {
-      console.error('DIAGNOSTIC ERROR: [AuthProvider] Authentication Error:', error);
+      console.error('DIAGNOSTIC ERROR: [AuthProvider] Passkey Flow Error:', error);
       setAuthError('auth-failed');
       toast({
         title: 'Authentication Error',
-        description: error.message || 'The passkey flow was interrupted.',
+        description: error.message || 'The passkey flow failed or timed out.',
         variant: 'destructive',
       });
     }
