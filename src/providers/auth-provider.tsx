@@ -14,7 +14,7 @@ import { AuthApi } from '@/lib/auth-api';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 
-// Polyfill check for ReferenceError: _async_to_generator
+// Polyfill check for ReferenceError: _async_to_generator occurring in some environments
 if (typeof window !== 'undefined' && !(window as any)._async_to_generator) {
   (window as any)._async_to_generator = (fn: any) => fn;
 }
@@ -45,11 +45,13 @@ function normalizeBase64URL(str: string): string {
   let cleanStr = str;
   if (str.startsWith('=?BINARY?B?')) {
     const b64 = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
-    const paddedB64 = b64.padEnd(b64.length + (4 - (b64.length % 4)) % 4, '=');
+    // Convert URL-safe to standard Base64 for atob
+    const standardB64 = b64.replace(/-/g, '+').replace(/_/g, '/');
+    const paddedB64 = standardB64.padEnd(standardB64.length + (4 - (standardB64.length % 4)) % 4, '=');
     
     try {
       const decoded = atob(paddedB64);
-      // If it's a printable Base64URL string (like q8EQ...), then the server double-encoded it.
+      // If decoded binary is a printable Base64URL string (like q8EQ...), the server double-encoded it.
       if (/^[A-Za-z0-9\-_]{10,}$/.test(decoded)) {
         cleanStr = decoded;
       } else {
@@ -105,7 +107,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   const login = useCallback((sessionData: UserSession) => {
-    console.log('DIAGNOSTIC: [AuthProvider] Logging in user:', sessionData.email);
     setUser(sessionData);
     setAuthError(null);
     try {
@@ -122,14 +123,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.replace('/login');
   }, [router]);
 
-  const logoutRef = useRef(logout);
-  const loginRef = useRef(login);
-
-  useEffect(() => {
-    logoutRef.current = logout;
-    loginRef.current = login;
-  }, [logout, login]);
-
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
@@ -144,15 +137,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data.status === 'success' && data.purpose === 'authenticated') {
         const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
-        loginRef.current({ ...data, email });
+        login({ ...data, email });
       } else if (data.status === 'fail' || data.purpose === 'logoff') {
-        logoutRef.current();
+        logout();
       }
     };
 
     window.addEventListener('message', handleServerMessage);
     return () => window.removeEventListener('message', handleServerMessage);
-  }, []);
+  }, [login, logout]);
 
   useEffect(() => {
     try {
@@ -177,20 +170,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       
-      console.log('DIAGNOSTIC: [AuthProvider] Normalized Options:', JSON.stringify(options, null, 2));
+      console.log('DIAGNOSTIC: [AuthProvider] Options for Browser:', JSON.stringify(options, null, 2));
 
       const isRegistration = !!(options.user && options.user.id);
       
       let credentialResponse;
       if (isRegistration) {
-        console.log('DIAGNOSTIC: [AuthProvider] Calling startRegistration({ optionsJSON })...');
+        console.log('DIAGNOSTIC: [AuthProvider] Calling startRegistration...');
         credentialResponse = await startRegistration({ optionsJSON: options });
       } else {
-        console.log('DIAGNOSTIC: [AuthProvider] Calling startAuthentication({ optionsJSON })...');
+        console.log('DIAGNOSTIC: [AuthProvider] Calling startAuthentication...');
         credentialResponse = await startAuthentication({ optionsJSON: options });
       }
       
-      console.log('DIAGNOSTIC: [AuthProvider] WebAuthn response received. Sending for verification...');
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {

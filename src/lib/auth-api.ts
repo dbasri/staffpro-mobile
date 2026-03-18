@@ -11,16 +11,12 @@ function parseFirstJson(text: string) {
   const start = text.indexOf('{');
   if (start === -1) return null;
 
-  // We find the last possible '}' to try and parse the largest possible object.
-  // We then work backwards to find the correct closing brace if the server appended noise.
   let end = text.lastIndexOf('}');
   while (end > start) {
     try {
       const jsonStr = text.substring(start, end + 1);
       return JSON.parse(jsonStr);
     } catch (e) {
-      // If parsing failed, maybe we found the wrong '}' (e.g. inside a string)
-      // Search for the previous '}' and try again.
       end = text.lastIndexOf('}', end - 1);
     }
   }
@@ -59,20 +55,15 @@ async function fetchSurgically(url: string, options: RequestInit) {
         
         const json = parseFirstJson(accumulated);
         if (json) {
-          console.log('DIAGNOSTIC: [AuthApi] Valid JSON found! Aborting connection immediately to prevent hang.');
-          // Cancel the reader to stop the server stream and prevent the 60s hang
+          console.log('DIAGNOSTIC: [AuthApi] Valid JSON found! Aborting connection immediately to prevent 60s hang.');
           await reader.cancel('JSON_FOUND').catch(() => {});
           return json;
         }
       }
 
-      if (done) {
-        console.log('DIAGNOSTIC: [AuthApi] Stream closed by server.');
-        break;
-      }
+      if (done) break;
     }
     
-    // Fallback if the stream ends without a complete object
     return JSON.parse(accumulated);
   } finally {
     reader.releaseLock();
@@ -82,8 +73,6 @@ async function fetchSurgically(url: string, options: RequestInit) {
 export const AuthApi = {
   async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
-    console.log('DIAGNOSTIC: [AuthApi] Requesting options for:', email);
-    
     return fetchSurgically(`${staffproBaseUrl}?passkey=options`, {
       method: 'POST',
       mode: 'cors',
@@ -95,8 +84,6 @@ export const AuthApi = {
 
   async verifyPasskey(assertion: any, email: string, deviceName: string): Promise<UserSession> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
-    console.log('DIAGNOSTIC: [AuthApi] Verifying passkey assertion...');
-
     return fetchSurgically(`${staffproBaseUrl}?passkey=verify`, {
       method: 'POST',
       mode: 'cors',
