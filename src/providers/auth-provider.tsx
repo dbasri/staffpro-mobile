@@ -35,32 +35,36 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
- * Normalizes string inputs for WebAuthn.
- * Specifically handles the server's =?BINARY?B? markers and double-encoded Base64.
+ * Surgically handles the server's binary markers and double-encoded Base64.
+ * Resilient against 'atob' encoding errors by converting to standard Base64 first.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
   
   let content = str.trim();
-  // 1. Unwrap PHP binary markers
+  // 1. Unwrap PHP binary markers if present
   if (content.startsWith('=?BINARY?B?')) {
     content = content.replace(/^=\?BINARY\?B?/, '').replace(/\?=$/, '').trim();
   }
 
-  // 2. Resolve double-encoding
-  // If the content is Base64 encoded again (common in some middleware), decode it once.
-  // Standard credential IDs are usually 43-44 chars (for 32 bytes). 
-  // If we have 64+ chars with standard Base64 markers, it's double-encoded.
-  if (content.length > 44 && (content.includes('+') || content.includes('/') || content.endsWith('='))) {
+  // 2. Resolve potential double-encoding
+  // If the content is suspiciously long (> 48 chars), it might be an inner Base64 string.
+  if (content.length > 48) {
     try {
-      const decoded = atob(content);
-      if (decoded.length > 20) {
+      // 'atob' expects standard Base64 (+ /), not Base64URL (- _)
+      const standardBase64 = content.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = atob(standardBase64);
+      // If the result looks like a valid credential ID (usually 43-44 chars), we use it.
+      if (decoded.length >= 32 && decoded.length <= 128) {
         content = decoded;
       }
-    } catch (e) {}
+    } catch (e) {
+      // If atob fails (invalid chars or padding), we fallback to the original content.
+      console.warn('DIAGNOSTIC: normalizeBase64URL encountered invalid Base64 for atob, falling back.');
+    }
   }
 
-  // 3. Final conversion to URL-safe Base64 (RFC 4648)
+  // 3. Final conversion to URL-safe Base64 (RFC 4648) required by WebAuthn
   return content
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -68,7 +72,7 @@ function normalizeBase64URL(str: string): string {
 }
 
 /**
- * Prepares WebAuthn options by normalizing binary-like fields.
+ * Prepares WebAuthn options by normalizing binary-like fields recursively.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -90,6 +94,7 @@ function prepareWebAuthnOptions(obj: any): any {
 
 /**
  * Improved device name extraction from User Agent.
+ * Specifically avoids generic 'K' identifiers on Android.
  */
 function getDeviceName(): string {
   if (typeof window === 'undefined') return 'Unknown Device';
@@ -98,17 +103,22 @@ function getDeviceName(): string {
   if (/iPhone/.test(ua)) return 'iPhone';
   if (/iPad/.test(ua)) return 'iPad';
   if (/Android/.test(ua)) {
-    // Look for common Android models to avoid generic "K" or "Build" identifiers
+    // Attempt to extract the hardware model (e.g., Pixel 8, SM-G991B)
     const modelMatch = ua.match(/Android\s+[^;]+;\s+([^;)]+)/);
     if (modelMatch && modelMatch[1]) {
       const model = modelMatch[1].trim();
-      if (model !== 'K' && !model.includes('Build/')) {
+      // Filter out generic keywords often found in truncated UAs
+      if (model.length > 1 && !/^(K|Build|Mobile|Version|Chrome|Safari)$/i.test(model)) {
         return model;
       }
     }
-    if (/Samsung/i.test(ua)) return 'Samsung Device';
+    // Brand search fallbacks
+    if (/Samsung|SM-|GT-/i.test(ua)) return 'Samsung Device';
     if (/Pixel/i.test(ua)) return 'Google Pixel';
-    return 'Android Device';
+    if (/Huawei|HMA-|LYA-/i.test(ua)) return 'Huawei Device';
+    
+    const osMatch = ua.match(/Android\s+([0-9.]+)/);
+    return osMatch ? `Android ${osMatch[1]} Device` : 'Android Device';
   }
   if (/Windows NT/.test(ua)) return 'Windows PC';
   if (/Macintosh/.test(ua)) return 'Mac';
@@ -182,14 +192,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const passkeyLogin = useCallback(async (email: string) => {
     setAuthError(null);
     const deviceName = getDeviceName();
-    console.log(`DIAGNOSTIC: [AuthProvider] Device: ${deviceName}`);
+    console.log(`DIAGNOSTIC: [AuthProvider] Device identified as: ${deviceName}`);
     
     try {
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
       const rawOptions = responseData.publicKey || responseData;
+      
+      // Preparation step with recursive normalization of binary fields
       const options = prepareWebAuthnOptions(rawOptions);
       
-      console.log('DIAGNOSTIC: [AuthProvider] RP ID:', options.rp?.id);
       console.log('DIAGNOSTIC: [AuthProvider] Options for Browser:', JSON.stringify(options, null, 2));
 
       // Identification: If 'user.id' exists, it is a Registration flow.

@@ -28,7 +28,7 @@ function parseFirstJson(text: string) {
 }
 
 /**
- * Fetches JSON from a server that might not close the connection.
+ * Fetches JSON from a server that might not close the connection properly.
  * It reads the stream and returns AS SOON as a valid JSON object is found,
  * then immediately aborts the connection to prevent 60s hangs.
  */
