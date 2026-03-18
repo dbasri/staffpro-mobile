@@ -49,11 +49,12 @@ function normalizeBase64URL(str: string): string {
     
     try {
       const decoded = atob(paddedB64);
-      // If it's a printable Base64URL string (like q8EQ...), use it. 
-      // Otherwise use the original b64 part (it was raw binary).
+      // If it's a printable Base64URL string (like q8EQ...), then the server double-encoded it.
+      // We return the decoded string which is the actual 43-character credential ID.
       if (/^[A-Za-z0-9\-_]{10,}$/.test(decoded)) {
         cleanStr = decoded;
       } else {
+        // If it's raw binary data (like a challenge), we use the stripped b64 content.
         cleanStr = b64;
       }
     } catch (e) {
@@ -214,11 +215,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             signal: diagAbort.signal
           };
           
-          // Force abort after 5 seconds
-          setTimeout(() => diagAbort.abort(), 5000);
+          // Force abort after 5 seconds to prevent indefinite UI hang
+          const diagTimeout = setTimeout(() => diagAbort.abort(), 5000);
           
           console.log('DIAGNOSTIC: [AuthProvider] Executing window.navigator.credentials.get(nativeOptions)...');
           const nativeCred = await window.navigator.credentials.get(nativeOptions);
+          clearTimeout(diagTimeout);
           console.log('DIAGNOSTIC: [AuthProvider] Native call returned:', nativeCred);
         } catch (diagError) {
           console.error('DIAGNOSTIC ERROR: [AuthProvider] Native call failed or timed out:', diagError);

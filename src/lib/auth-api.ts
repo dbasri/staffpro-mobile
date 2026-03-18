@@ -81,7 +81,7 @@ async function fetchSurgically(url: string, options: RequestInit) {
         
         const json = parseFirstJson(accumulated);
         if (json) {
-          console.log('DIAGNOSTIC: [AuthApi] Valid JSON found! Aborting connection immediately.');
+          console.log('DIAGNOSTIC: [AuthApi] Valid JSON found! Aborting connection immediately to prevent 60s hang.');
           // Cancel the reader to stop the server stream and prevent the 60s hang
           await reader.cancel('JSON_FOUND').catch(() => {});
           return json;
