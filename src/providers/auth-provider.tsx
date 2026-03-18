@@ -44,13 +44,15 @@ function normalizeBase64URL(str: string): string {
   let cleanStr = str;
   if (str.startsWith('=?BINARY?B?')) {
     const b64 = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
-    // Convert URL-safe to standard Base64 for atob
+    
+    // Add missing padding if necessary for atob
     const standardB64 = b64.replace(/-/g, '+').replace(/_/g, '/');
     const paddedB64 = standardB64.padEnd(standardB64.length + (4 - (standardB64.length % 4)) % 4, '=');
     
     try {
       const decoded = atob(paddedB64);
-      // If decoded binary is a printable Base64URL string (like q8EQ...), the server double-encoded it.
+      // If the decoded binary is a printable string that looks like a Base64URL ID (43 chars, URL safe)
+      // then the server double-encoded it.
       if (/^[A-Za-z0-9\-_]{10,}$/.test(decoded)) {
         cleanStr = decoded;
       } else {
@@ -166,11 +168,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
+      // Surgical extraction: Ensure we get the publicKey object regardless of noise
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       
       console.log('DIAGNOSTIC: [AuthProvider] Options for Browser:', JSON.stringify(options, null, 2));
 
+      // Identification: If 'user.id' exists, it is a Registration options object.
+      // Otherwise, it is an Authentication options object.
       const isRegistration = !!(options.user && options.user.id);
       
       let credentialResponse;
@@ -182,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         credentialResponse = await startAuthentication({ optionsJSON: options });
       }
       
+      console.log('DIAGNOSTIC: [AuthProvider] Credential Response:', JSON.stringify(credentialResponse, null, 2));
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {

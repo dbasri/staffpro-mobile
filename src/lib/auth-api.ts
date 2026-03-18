@@ -15,7 +15,12 @@ function parseFirstJson(text: string) {
   while (end > start) {
     try {
       const jsonStr = text.substring(start, end + 1);
-      return JSON.parse(jsonStr);
+      const parsed = JSON.parse(jsonStr);
+      // Ensure it's a complete object by checking for a status or purpose field commonly used in this app
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+      end = text.lastIndexOf('}', end - 1);
     } catch (e) {
       end = text.lastIndexOf('}', end - 1);
     }
@@ -56,6 +61,7 @@ async function fetchSurgically(url: string, options: RequestInit) {
         const json = parseFirstJson(accumulated);
         if (json) {
           console.log('DIAGNOSTIC: [AuthApi] Valid JSON found! Aborting connection immediately to prevent 60s hang.');
+          // CRITICAL: Cancel the reader to stop the browser from waiting for the server to close the stream.
           await reader.cancel('JSON_FOUND').catch(() => {});
           return json;
         }
@@ -64,6 +70,7 @@ async function fetchSurgically(url: string, options: RequestInit) {
       if (done) break;
     }
     
+    // Fallback to standard parse if the stream actually finishes
     return JSON.parse(accumulated);
   } finally {
     reader.releaseLock();
