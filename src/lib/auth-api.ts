@@ -4,7 +4,7 @@ import { staffproBaseUrl } from './config';
 import type { UserSession } from '@/types/session';
 
 /**
- * Surgically extracts the first valid JSON object from a string.
+ * Surgically extracts the first valid JSON object from a string using brace counting.
  */
 function parseFirstJson(text: string) {
   const start = text.indexOf('{');
@@ -38,7 +38,8 @@ function parseFirstJson(text: string) {
       
       if (depth === 0) {
         try {
-          return JSON.parse(text.substring(start, i + 1));
+          const jsonStr = text.substring(start, i + 1);
+          return JSON.parse(jsonStr);
         } catch (e) {
           return null;
         }
@@ -49,11 +50,18 @@ function parseFirstJson(text: string) {
 }
 
 /**
- * Fetches JSON from a server that might not close the connection or appends junk.
+ * Fetches JSON from a server that might not close the connection.
  * It reads the stream and returns as soon as a valid JSON object is found.
  */
 async function fetchSurgically(url: string, options: RequestInit) {
+  console.log(`DIAGNOSTIC: [AuthApi] Fetching: ${url}`);
   const response = await fetch(url, options);
+  
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => 'Unknown error');
+    throw new Error(`Server responded with status ${response.status}: ${errorText}`);
+  }
+
   if (!response.body) throw new Error('No response body');
 
   const reader = response.body.getReader();
@@ -65,16 +73,18 @@ async function fetchSurgically(url: string, options: RequestInit) {
       const { done, value } = await reader.read();
       if (done) break;
       
-      accumulated += decoder.decode(value, { stream: true });
+      const chunk = decoder.decode(value, { stream: true });
+      accumulated += chunk;
       
       const json = parseFirstJson(accumulated);
       if (json) {
+        console.log('DIAGNOSTIC: [AuthApi] Valid JSON found! Aborting connection.');
         // We found our object! Cancel the reader to stop the server stream.
-        await reader.cancel();
+        await reader.cancel().catch(() => {});
         return json;
       }
     }
-    // Fallback if the stream ends without a match
+    // Fallback if the stream ends without finding a complete object via brace counting
     return JSON.parse(accumulated);
   } finally {
     reader.releaseLock();
@@ -84,7 +94,7 @@ async function fetchSurgically(url: string, options: RequestInit) {
 export const AuthApi = {
   async getPasskeyOptions(email: string, deviceName: string): Promise<any> {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
-    console.log('DIAGNOSTIC: [AuthApi] Fetching passkey options for:', email);
+    console.log('DIAGNOSTIC: [AuthApi] Requesting options for:', email);
     
     return fetchSurgically(`${staffproBaseUrl}?passkey=options`, {
       method: 'POST',

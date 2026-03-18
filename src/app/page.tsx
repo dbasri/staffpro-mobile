@@ -27,6 +27,7 @@ function MainPage() {
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
+  // Prevent automatic redirects if there is an auth error, so we can see the console logs
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
       router.replace('/');
@@ -42,6 +43,7 @@ function MainPage() {
     }
   }, [isLoggingOut, logout]);
 
+  // Only redirect to login if we are NOT loading, NOT authenticated, NOT verifying, NOT logging out, AND NO errors are present
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
       router.replace('/login');
@@ -91,6 +93,7 @@ function MainPage() {
     return <GlobalLoader />;
   }
 
+  // Display error state clearly and block redirects
   if (authError) {
     return (
       <main className="relative h-dvh w-full overflow-hidden bg-background flex items-center justify-center p-6 text-center">
@@ -100,9 +103,7 @@ function MainPage() {
           </div>
           <h2 className="text-2xl font-bold text-destructive">Authentication Error</h2>
           <p className="text-muted-foreground text-sm">
-            {authError === 'auth-failed' 
-              ? 'The passkey flow was interrupted or timed out. Check the console for details.' 
-              : 'The verification process could not be completed.'}
+            The passkey flow was interrupted or timed out. Check the diagnostic logs in the browser console.
           </p>
           <Button onClick={handleBackToLogin} className="w-full">
             Return to Login
