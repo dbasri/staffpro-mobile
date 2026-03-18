@@ -60,7 +60,7 @@ async function fetchSurgically(url: string, options: RequestInit) {
         
         const json = parseFirstJson(accumulated);
         if (json) {
-          console.log('DIAGNOSTIC: [AuthApi] Valid JSON detected! Aborting connection immediately to bypass 60s timeout.');
+          console.log('DIAGNOSTIC: [AuthApi] Valid JSON detected! Aborting connection immediately.');
           // CRITICAL: Force close the stream reader so the browser stops waiting.
           await reader.cancel('JSON_FOUND').catch(() => {});
           return json;
@@ -70,7 +70,6 @@ async function fetchSurgically(url: string, options: RequestInit) {
       if (done) break;
     }
     
-    // Fallback: If stream actually finishes without finding JSON inside parseFirstJson
     return JSON.parse(accumulated);
   } finally {
     reader.releaseLock();

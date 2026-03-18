@@ -35,48 +35,27 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
- * Handles the pattern "=?BINARY?B?...base64_data...?=" used by the server.
- * Surgically handles double-encoding where the marker contains a second Base64 string.
+ * Normalizes string inputs for WebAuthn.
+ * Specifically handles the server's =?BINARY?B? markers and ensures URL-safe Base64.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
   
   let content = str;
+  // Unwrap PHP binary markers
   if (str.startsWith('=?BINARY?B?')) {
-    content = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
+    content = str.replace(/^=\?BINARY\?B?/, '').replace(/\?=$/, '').trim();
   }
 
-  // Ensure content is a valid Base64 string for atob (fix padding and URL-safety)
-  const standardB64 = content.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = standardB64.length % 4;
-  const paddedB64 = pad ? standardB64 + "=".repeat(4 - pad) : standardB64;
-  
-  try {
-    const decoded = atob(paddedB64);
-    // Case 1: Double-encoded. The 'decoded' result is already a 43-char Base64URL string (e.g. q8EQ...)
-    if (/^[A-Za-z0-9\-_]{10,}$/.test(decoded)) {
-      console.log('DIAGNOSTIC: [normalize] Double-encoding detected. Returning nested string.');
-      return decoded;
-    }
-    
-    // Case 2: Standard single encoding. The 'decoded' result is raw binary bytes.
-    // Convert raw bytes to a clean Base64URL string for the browser.
-    const bytes = new Uint8Array(decoded.length);
-    for (let i = 0; i < decoded.length; i++) {
-      bytes[i] = decoded.charCodeAt(i);
-    }
-    return btoa(String.fromCharCode(...bytes))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
-  } catch (e) {
-    console.warn('DIAGNOSTIC: [normalize] atob failed, returning cleaned content.');
-    return content.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  }
+  // Convert to URL-safe Base64 (RFC 4648)
+  return content
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
 }
 
 /**
- * Recursively prepares WebAuthn options by cleaning binary fields.
+ * Prepares WebAuthn options by normalizing binary-like fields.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -98,6 +77,7 @@ function prepareWebAuthnOptions(obj: any): any {
 
 /**
  * Improved device name extraction from User Agent.
+ * Captures more specific model info for Android.
  */
 function getDeviceName(): string {
   if (typeof window === 'undefined') return 'Unknown Device';
@@ -106,9 +86,11 @@ function getDeviceName(): string {
   if (/iPhone/.test(ua)) return 'iPhone';
   if (/iPad/.test(ua)) return 'iPad';
   if (/Android/.test(ua)) {
-    // Attempt to extract model like "Android 14; Pixel 8 Pro"
-    const match = ua.match(/Android\s+([^\s;]+);\s+([^\s;)]+)/);
-    if (match) return `${match[2]} (Android ${match[1]})`;
+    // Attempt to extract hardware model like "Pixel 8 Pro" or "SM-G991B"
+    const androidMatch = ua.match(/Android\s+[^;]+;\s+([^;)]+)/);
+    if (androidMatch && androidMatch[1] && androidMatch[1] !== 'K') {
+      return androidMatch[1].trim();
+    }
     return 'Android Device';
   }
   if (/Windows NT/.test(ua)) return 'Windows PC';
@@ -183,26 +165,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const passkeyLogin = useCallback(async (email: string) => {
     setAuthError(null);
     const deviceName = getDeviceName();
-    console.log(`DIAGNOSTIC: [AuthProvider] Device identified as: ${deviceName}`);
+    console.log(`DIAGNOSTIC: [AuthProvider] Device: ${deviceName}`);
     
     try {
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
-      
-      // Surgical extraction: Ensure we get the publicKey object regardless of noise
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       
-      console.log('DIAGNOSTIC: [AuthProvider] Normalized Options for Browser:', JSON.stringify(options, null, 2));
+      console.log('DIAGNOSTIC: [AuthProvider] RP ID:', options.rp?.id);
+      console.log('DIAGNOSTIC: [AuthProvider] Options for Browser:', JSON.stringify(options, null, 2));
 
       // Identification: If 'user.id' exists, it is a Registration flow.
       const isRegistration = !!(options.user && options.user.id);
       
       let credentialResponse;
       if (isRegistration) {
-        console.log('DIAGNOSTIC: [AuthProvider] Calling startRegistration...');
+        console.log('DIAGNOSTIC: [AuthProvider] Starting Registration...');
         credentialResponse = await startRegistration({ optionsJSON: options });
       } else {
-        console.log('DIAGNOSTIC: [AuthProvider] Calling startAuthentication...');
+        console.log('DIAGNOSTIC: [AuthProvider] Starting Authentication...');
         credentialResponse = await startAuthentication({ optionsJSON: options });
       }
       
