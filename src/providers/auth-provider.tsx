@@ -31,18 +31,33 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
- * Cleans binary markers and ensures URL-safe Base64 strings.
+ * Handles the pattern "=?BINARY?B?...base64_data...?=" commonly used by PHP/LDAP.
+ * If double-encoded, it decodes the content before normalizing to URL-safe Base64.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
-  // Handle the PHP/binary prefix if present
-  let cleanStr = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
-  // Ensure URL-safe characters and remove padding
-  return cleanStr.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  
+  let cleanStr = str;
+  if (str.startsWith('=?BINARY?B?')) {
+    const b64Content = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
+    try {
+      // Decode the marker content. If cThF... is sent, this yields q8EQ...
+      cleanStr = atob(b64Content);
+    } catch (e) {
+      cleanStr = b64Content;
+    }
+  }
+  
+  // Ensure the final string is URL-safe and has no padding
+  return cleanStr
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '')
+    .trim();
 }
 
 /**
- * Recursively prepares WebAuthn options by cleaning challenge and ID fields.
+ * Recursively prepares WebAuthn options by cleaning binary fields.
  */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -51,7 +66,7 @@ function prepareWebAuthnOptions(obj: any): any {
   const normalized: any = {};
   for (const key in obj) {
     const val = obj[key];
-    // Challenge and ID fields are always binary and need normalization
+    // Binary fields are normalized to URL-safe Base64
     if (['challenge', 'id'].includes(key) && typeof val === 'string') {
       normalized[key] = normalizeBase64URL(val);
     } else {
@@ -147,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
-      // Unwrap publicKey if server provided it, otherwise use root
+      // The options may be wrapped in a 'publicKey' property or sent directly
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       
@@ -158,10 +173,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       let credentialResponse;
       if (isRegistration) {
-        console.log('DIAGNOSTIC: [AuthProvider] Invoking startRegistration...');
+        console.log('DIAGNOSTIC: [AuthProvider] Calling startRegistration...');
         credentialResponse = await startRegistration({ optionsJSON: options });
       } else {
-        console.log('DIAGNOSTIC: [AuthProvider] Invoking startAuthentication...');
+        console.log('DIAGNOSTIC: [AuthProvider] Calling startAuthentication...');
         credentialResponse = await startAuthentication({ optionsJSON: options });
       }
       
