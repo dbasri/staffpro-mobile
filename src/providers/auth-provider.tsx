@@ -200,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!isRegistration && options.allowCredentials) {
         console.log('DIAGNOSTIC: [AuthProvider] Attempting native navigator.credentials.get diagnostic test...');
         try {
+          const diagAbort = new AbortController();
           const nativeOptions: any = {
             publicKey: {
               ...options,
@@ -209,12 +210,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 id: base64URLToUint8Array(cred.id)
               }))
             },
-            // Immediate abort for diagnostic only
-            signal: new AbortController().signal
+            signal: diagAbort.signal
           };
-          console.log('DIAGNOSTIC: [AuthProvider] Native diagnostic options prepared.');
+          
+          // Force abort after 5 seconds so the diagnostic doesn't block the actual flow indefinitely
+          setTimeout(() => diagAbort.abort(), 5000);
+          
+          console.log('DIAGNOSTIC: [AuthProvider] Executing window.navigator.credentials.get(nativeOptions)...');
+          const nativeCred = await window.navigator.credentials.get(nativeOptions);
+          console.log('DIAGNOSTIC: [AuthProvider] Native call returned:', nativeCred);
         } catch (diagError) {
-          console.error('DIAGNOSTIC ERROR: [AuthProvider] Native options preparation failed:', diagError);
+          console.error('DIAGNOSTIC ERROR: [AuthProvider] Native call failed or timed out:', diagError);
         }
       }
       // --- END DIAGNOSTIC TEST ---
