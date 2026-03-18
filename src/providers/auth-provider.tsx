@@ -49,7 +49,8 @@ function normalizeBase64URL(str: string): string {
     
     try {
       const decoded = atob(paddedB64);
-      // If it's a printable Base64URL string, use it. Otherwise use the original b64 part.
+      // If it's a printable Base64URL string (like q8EQ...), use it. 
+      // Otherwise use the original b64 part (it was raw binary).
       if (/^[A-Za-z0-9\-_]{10,}$/.test(decoded)) {
         cleanStr = decoded;
       } else {
@@ -213,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             signal: diagAbort.signal
           };
           
-          // Force abort after 5 seconds so the diagnostic doesn't block the actual flow indefinitely
+          // Force abort after 5 seconds
           setTimeout(() => diagAbort.abort(), 5000);
           
           console.log('DIAGNOSTIC: [AuthProvider] Executing window.navigator.credentials.get(nativeOptions)...');
