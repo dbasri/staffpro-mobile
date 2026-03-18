@@ -46,9 +46,10 @@ function normalizeBase64URL(str: string): string {
     content = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
   }
 
-  // Ensure content is a valid Base64 string for atob (fix padding)
+  // Ensure content is a valid Base64 string for atob (fix padding and URL-safety)
   const standardB64 = content.replace(/-/g, '+').replace(/_/g, '/');
-  const paddedB64 = standardB64.padEnd(standardB64.length + (4 - (standardB64.length % 4)) % 4, '=');
+  const pad = standardB64.length % 4;
+  const paddedB64 = pad ? standardB64 + "=".repeat(4 - pad) : standardB64;
   
   try {
     const decoded = atob(paddedB64);
@@ -69,7 +70,7 @@ function normalizeBase64URL(str: string): string {
       .replace(/\//g, '_')
       .replace(/=/g, '');
   } catch (e) {
-    // Fallback: Just return the content stripped of URL-unsafe characters
+    console.warn('DIAGNOSTIC: [normalize] atob failed, returning cleaned content.');
     return content.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   }
 }
@@ -105,6 +106,7 @@ function getDeviceName(): string {
   if (/iPhone/.test(ua)) return 'iPhone';
   if (/iPad/.test(ua)) return 'iPad';
   if (/Android/.test(ua)) {
+    // Attempt to extract model like "Android 14; Pixel 8 Pro"
     const match = ua.match(/Android\s+([^\s;]+);\s+([^\s;)]+)/);
     if (match) return `${match[2]} (Android ${match[1]})`;
     return 'Android Device';
@@ -181,7 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const passkeyLogin = useCallback(async (email: string) => {
     setAuthError(null);
     const deviceName = getDeviceName();
-    console.log(`DIAGNOSTIC: [AuthProvider] Device Name identified as: ${deviceName}`);
+    console.log(`DIAGNOSTIC: [AuthProvider] Device identified as: ${deviceName}`);
     
     try {
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
