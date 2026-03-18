@@ -6,7 +6,6 @@ import {
   createContext,
   type ReactNode,
   useCallback,
-  useRef,
 } from 'react';
 import type { UserSession } from '@/types/session';
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
