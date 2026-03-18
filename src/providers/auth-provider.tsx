@@ -50,11 +50,9 @@ function normalizeBase64URL(str: string): string {
     try {
       const decoded = atob(paddedB64);
       // If it's a printable Base64URL string (like q8EQ...), then the server double-encoded it.
-      // We return the decoded string which is the actual 43-character credential ID.
       if (/^[A-Za-z0-9\-_]{10,}$/.test(decoded)) {
         cleanStr = decoded;
       } else {
-        // If it's raw binary data (like a challenge), we use the stripped b64 content.
         cleanStr = b64;
       }
     } catch (e) {
@@ -88,21 +86,6 @@ function prepareWebAuthnOptions(obj: any): any {
     }
   }
   return normalized;
-}
-
-/**
- * Decodes Base64URL string to Uint8Array for native navigator calls.
- */
-function base64URLToUint8Array(base64url: string): Uint8Array {
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
-  const padLen = (4 - (base64.length % 4)) % 4;
-  const padded = base64.padEnd(base64.length + padLen, '=');
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }
 
 function getDeviceName(): string {
@@ -197,36 +180,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('DIAGNOSTIC: [AuthProvider] Normalized Options:', JSON.stringify(options, null, 2));
 
       const isRegistration = !!(options.user && options.user.id);
-
-      // --- DIAGNOSTIC TEST FOR NATIVE API ---
-      if (!isRegistration && options.allowCredentials) {
-        console.log('DIAGNOSTIC: [AuthProvider] Attempting native navigator.credentials.get diagnostic test...');
-        try {
-          const diagAbort = new AbortController();
-          const nativeOptions: any = {
-            publicKey: {
-              ...options,
-              challenge: base64URLToUint8Array(options.challenge),
-              allowCredentials: options.allowCredentials.map((cred: any) => ({
-                ...cred,
-                id: base64URLToUint8Array(cred.id)
-              }))
-            },
-            signal: diagAbort.signal
-          };
-          
-          // Force abort after 5 seconds to prevent indefinite UI hang
-          const diagTimeout = setTimeout(() => diagAbort.abort(), 5000);
-          
-          console.log('DIAGNOSTIC: [AuthProvider] Executing window.navigator.credentials.get(nativeOptions)...');
-          const nativeCred = await window.navigator.credentials.get(nativeOptions);
-          clearTimeout(diagTimeout);
-          console.log('DIAGNOSTIC: [AuthProvider] Native call returned:', nativeCred);
-        } catch (diagError) {
-          console.error('DIAGNOSTIC ERROR: [AuthProvider] Native call failed or timed out:', diagError);
-        }
-      }
-      // --- END DIAGNOSTIC TEST ---
       
       let credentialResponse;
       if (isRegistration) {

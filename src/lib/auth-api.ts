@@ -4,46 +4,24 @@ import { staffproBaseUrl } from './config';
 import type { UserSession } from '@/types/session';
 
 /**
- * Surgically extracts the first valid JSON object from a string using brace counting.
+ * Surgically extracts the first valid JSON object from a string.
+ * Handles leading noise (like PHP warnings) and trailing data (like open streams).
  */
 function parseFirstJson(text: string) {
   const start = text.indexOf('{');
   if (start === -1) return null;
 
-  let depth = 0;
-  let inString = false;
-  let escape = false;
-
-  for (let i = start; i < text.length; i++) {
-    const char = text[i];
-    
-    if (escape) {
-      escape = false;
-      continue;
-    }
-    
-    if (char === '\\') {
-      escape = true;
-      continue;
-    }
-    
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-    
-    if (!inString) {
-      if (char === '{') depth++;
-      else if (char === '}') depth--;
-      
-      if (depth === 0) {
-        try {
-          const jsonStr = text.substring(start, i + 1);
-          return JSON.parse(jsonStr);
-        } catch (e) {
-          return null;
-        }
-      }
+  // We find the last possible '}' to try and parse the largest possible object.
+  // We then work backwards to find the correct closing brace if the server appended noise.
+  let end = text.lastIndexOf('}');
+  while (end > start) {
+    try {
+      const jsonStr = text.substring(start, end + 1);
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      // If parsing failed, maybe we found the wrong '}' (e.g. inside a string)
+      // Search for the previous '}' and try again.
+      end = text.lastIndexOf('}', end - 1);
     }
   }
   return null;
@@ -81,14 +59,17 @@ async function fetchSurgically(url: string, options: RequestInit) {
         
         const json = parseFirstJson(accumulated);
         if (json) {
-          console.log('DIAGNOSTIC: [AuthApi] Valid JSON found! Aborting connection immediately to prevent 60s hang.');
+          console.log('DIAGNOSTIC: [AuthApi] Valid JSON found! Aborting connection immediately to prevent hang.');
           // Cancel the reader to stop the server stream and prevent the 60s hang
           await reader.cancel('JSON_FOUND').catch(() => {});
           return json;
         }
       }
 
-      if (done) break;
+      if (done) {
+        console.log('DIAGNOSTIC: [AuthApi] Stream closed by server.');
+        break;
+      }
     }
     
     // Fallback if the stream ends without a complete object
