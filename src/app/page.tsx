@@ -27,7 +27,7 @@ function MainPage() {
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
-  // Prevent automatic redirects if there is an auth error, so we can see the console logs
+  // Prevent automatic redirects if authenticated so the user stays on the home view
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
       router.replace('/');
@@ -44,6 +44,7 @@ function MainPage() {
   }, [isLoggingOut, logout]);
 
   // Only redirect to login if we are NOT loading, NOT authenticated, NOT verifying, NOT logging out, AND NO errors are present
+  // This ensures diagnostic logs are visible if an error occurs.
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
       router.replace('/login');
@@ -95,7 +96,7 @@ function MainPage() {
     return <GlobalLoader />;
   }
 
-  // Display error state clearly and block redirects
+  // Display persistent error state to block redirects and preserve console logs
   if (authError) {
     return (
       <main className="relative h-dvh w-full overflow-hidden bg-background flex items-center justify-center p-6 text-center">
@@ -105,7 +106,7 @@ function MainPage() {
           </div>
           <h2 className="text-2xl font-bold text-destructive">Authentication Error</h2>
           <p className="text-muted-foreground text-sm">
-            The passkey flow was interrupted or timed out. Check the diagnostic logs in the browser console.
+            The passkey flow was interrupted or timed out. Check the diagnostic logs in the browser console for details.
           </p>
           <Button onClick={handleBackToLogin} className="w-full">
             Return to Login

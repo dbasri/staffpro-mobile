@@ -5,7 +5,7 @@ import type { UserSession } from '@/types/session';
 
 /**
  * Surgically extracts the first valid JSON object from a string.
- * Handles leading noise (like PHP warnings) and trailing data (like open streams).
+ * Resilient against PHP warnings or trailing stream data.
  */
 function parseFirstJson(text: string) {
   const start = text.indexOf('{');
@@ -16,7 +16,6 @@ function parseFirstJson(text: string) {
     try {
       const jsonStr = text.substring(start, end + 1);
       const parsed = JSON.parse(jsonStr);
-      // Ensure it's a complete object by checking for a status or purpose field commonly used in this app
       if (parsed && typeof parsed === 'object') {
         return parsed;
       }
@@ -30,7 +29,8 @@ function parseFirstJson(text: string) {
 
 /**
  * Fetches JSON from a server that might not close the connection.
- * It reads the stream and returns as soon as a valid JSON object is found.
+ * It reads the stream and returns AS SOON as a valid JSON object is found,
+ * then immediately aborts the connection to prevent 60s hangs.
  */
 async function fetchSurgically(url: string, options: RequestInit) {
   console.log(`DIAGNOSTIC: [AuthApi] Fetching: ${url}`);
@@ -60,8 +60,8 @@ async function fetchSurgically(url: string, options: RequestInit) {
         
         const json = parseFirstJson(accumulated);
         if (json) {
-          console.log('DIAGNOSTIC: [AuthApi] Valid JSON found! Aborting connection immediately to prevent 60s hang.');
-          // CRITICAL: Cancel the reader to stop the browser from waiting for the server to close the stream.
+          console.log('DIAGNOSTIC: [AuthApi] Valid JSON detected! Aborting connection immediately to bypass 60s timeout.');
+          // CRITICAL: Force close the stream reader so the browser stops waiting.
           await reader.cancel('JSON_FOUND').catch(() => {});
           return json;
         }
@@ -70,7 +70,7 @@ async function fetchSurgically(url: string, options: RequestInit) {
       if (done) break;
     }
     
-    // Fallback to standard parse if the stream actually finishes
+    // Fallback: If stream actually finishes without finding JSON inside parseFirstJson
     return JSON.parse(accumulated);
   } finally {
     reader.releaseLock();

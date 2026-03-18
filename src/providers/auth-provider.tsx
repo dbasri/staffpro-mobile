@@ -35,39 +35,43 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
- * Handles the pattern "=?BINARY?B?...base64_data...?=" commonly used by PHP/LDAP.
- * Corrects double-encoding and ensures URL-safe format.
+ * Handles the pattern "=?BINARY?B?...base64_data...?=" used by the server.
+ * Surgically handles double-encoding where the marker contains a second Base64 string.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
   
-  let cleanStr = str;
+  let content = str;
   if (str.startsWith('=?BINARY?B?')) {
-    const b64 = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
-    
-    // Add missing padding if necessary for atob
-    const standardB64 = b64.replace(/-/g, '+').replace(/_/g, '/');
-    const paddedB64 = standardB64.padEnd(standardB64.length + (4 - (standardB64.length % 4)) % 4, '=');
-    
-    try {
-      const decoded = atob(paddedB64);
-      // If the decoded binary is a printable string that looks like a Base64URL ID (43 chars, URL safe)
-      // then the server double-encoded it.
-      if (/^[A-Za-z0-9\-_]{10,}$/.test(decoded)) {
-        cleanStr = decoded;
-      } else {
-        cleanStr = b64;
-      }
-    } catch (e) {
-      cleanStr = b64;
-    }
+    content = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
   }
+
+  // Ensure content is a valid Base64 string for atob (fix padding)
+  const standardB64 = content.replace(/-/g, '+').replace(/_/g, '/');
+  const paddedB64 = standardB64.padEnd(standardB64.length + (4 - (standardB64.length % 4)) % 4, '=');
   
-  return cleanStr
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '')
-    .trim();
+  try {
+    const decoded = atob(paddedB64);
+    // Case 1: Double-encoded. The 'decoded' result is already a 43-char Base64URL string (e.g. q8EQ...)
+    if (/^[A-Za-z0-9\-_]{10,}$/.test(decoded)) {
+      console.log('DIAGNOSTIC: [normalize] Double-encoding detected. Returning nested string.');
+      return decoded;
+    }
+    
+    // Case 2: Standard single encoding. The 'decoded' result is raw binary bytes.
+    // Convert raw bytes to a clean Base64URL string for the browser.
+    const bytes = new Uint8Array(decoded.length);
+    for (let i = 0; i < decoded.length; i++) {
+      bytes[i] = decoded.charCodeAt(i);
+    }
+    return btoa(String.fromCharCode(...bytes))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  } catch (e) {
+    // Fallback: Just return the content stripped of URL-unsafe characters
+    return content.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  }
 }
 
 /**
@@ -91,11 +95,23 @@ function prepareWebAuthnOptions(obj: any): any {
   return normalized;
 }
 
+/**
+ * Improved device name extraction from User Agent.
+ */
 function getDeviceName(): string {
-  if (typeof window === 'undefined') return 'Unknown';
+  if (typeof window === 'undefined') return 'Unknown Device';
   const ua = window.navigator.userAgent;
-  if (/iPad|iPhone|iPod/.test(ua)) return 'iOS Device';
-  if (/Android/.test(ua)) return 'Android Device';
+  
+  if (/iPhone/.test(ua)) return 'iPhone';
+  if (/iPad/.test(ua)) return 'iPad';
+  if (/Android/.test(ua)) {
+    const match = ua.match(/Android\s+([^\s;]+);\s+([^\s;)]+)/);
+    if (match) return `${match[2]} (Android ${match[1]})`;
+    return 'Android Device';
+  }
+  if (/Windows NT/.test(ua)) return 'Windows PC';
+  if (/Macintosh/.test(ua)) return 'Mac';
+  
   return 'Mobile Browser';
 }
 
@@ -165,17 +181,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const passkeyLogin = useCallback(async (email: string) => {
     setAuthError(null);
     const deviceName = getDeviceName();
+    console.log(`DIAGNOSTIC: [AuthProvider] Device Name identified as: ${deviceName}`);
     
     try {
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
+      
       // Surgical extraction: Ensure we get the publicKey object regardless of noise
       const rawOptions = responseData.publicKey || responseData;
       const options = prepareWebAuthnOptions(rawOptions);
       
-      console.log('DIAGNOSTIC: [AuthProvider] Options for Browser:', JSON.stringify(options, null, 2));
+      console.log('DIAGNOSTIC: [AuthProvider] Normalized Options for Browser:', JSON.stringify(options, null, 2));
 
-      // Identification: If 'user.id' exists, it is a Registration options object.
-      // Otherwise, it is an Authentication options object.
+      // Identification: If 'user.id' exists, it is a Registration flow.
       const isRegistration = !!(options.user && options.user.id);
       
       let credentialResponse;
