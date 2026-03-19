@@ -35,15 +35,15 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
+ * RESTORED: User-provided working normalization function.
  * Surgically extracts the Base64 content from PHP binary markers and handles double-encoding.
- * RESTORED: User-provided working version.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
   
   let cleanStr = str;
   if (str.startsWith('=?BINARY?B?')) {
-    const b64 = str.replace(/^=\?BINARY\?B?/, '').replace(/\?=$/, '').trim();
+    const b64 = str.replace(/^=\?BINARY\?B\?/, '').replace(/\?=$/, '').trim();
     const paddedB64 = b64.padEnd(b64.length + (4 - (b64.length % 4)) % 4, '=');
     
     try {
@@ -99,7 +99,6 @@ function getDeviceName(): string {
   
   if (/Android/.test(ua)) {
     // Attempt to extract the hardware model (e.g., "Pixel 8 Pro", "SM-G991B")
-    // Regex looks for the string between the first semicolon after Android version and the end of that segment.
     const match = ua.match(/Android\s+([0-9.]+);\s+([^;)]+)/);
     if (match) {
       const version = match[1];
