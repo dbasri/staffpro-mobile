@@ -17,7 +17,7 @@ function parseFirstJson(accumulated: string) {
       const jsonStr = accumulated.substring(start, end + 1);
       const parsed = JSON.parse(jsonStr);
       // Ensure we have a valid object with expected status/purpose keys
-      if (parsed && typeof parsed === 'object') {
+      if (parsed && typeof parsed === 'object' && ('status' in parsed || 'purpose' in parsed)) {
         return parsed;
       }
       end = accumulated.lastIndexOf('}', end - 1);

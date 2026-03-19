@@ -35,26 +35,35 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
- * Normalizes binary fields (challenge, user.id, etc.) sent by the server.
- * Surgically handles PHP binary markers and converts standard Base64 to URL-safe Base64.
+ * Surgically extracts the Base64 content from PHP binary markers and handles double-encoding.
+ * RESTORED: User-provided working version.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
   
-  let content = str.trim();
-  
-  // 1. Strip PHP binary markers if present
-  if (content.startsWith('=?BINARY?B?')) {
-    content = content.replace(/^=\?BINARY\?B?/, '').replace(/\?=$/, '').trim();
+  let cleanStr = str;
+  if (str.startsWith('=?BINARY?B?')) {
+    const b64 = str.replace(/^=\?BINARY\?B?/, '').replace(/\?=$/, '').trim();
+    const paddedB64 = b64.padEnd(b64.length + (4 - (b64.length % 4)) % 4, '=');
+    
+    try {
+      const decoded = atob(paddedB64);
+      // If it's a printable Base64URL string, use it. Otherwise use the original b64 part.
+      if (/^[A-Za-z0-9\-_]{10,}$/.test(decoded)) {
+        cleanStr = decoded;
+      } else {
+        cleanStr = b64;
+      }
+    } catch (e) {
+      cleanStr = b64;
+    }
   }
-
-  // 2. Final conversion to URL-safe Base64 (RFC 4648) required by WebAuthn
-  // We replace standard Base64 characters and remove padding.
-  // We avoid 'atob' here to prevent encoding mismatch errors.
-  return content
+  
+  return cleanStr
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
-    .replace(/=/g, '');
+    .replace(/=/g, '')
+    .trim();
 }
 
 /**
@@ -89,14 +98,15 @@ function getDeviceName(): string {
   if (/iPhone|iPad/.test(ua)) return 'Apple Device';
   
   if (/Android/.test(ua)) {
-    // Attempt to extract the hardware model (e.g., "Pixel 8", "SM-G991B")
+    // Attempt to extract the hardware model (e.g., "Pixel 8 Pro", "SM-G991B")
+    // Regex looks for the string between the first semicolon after Android version and the end of that segment.
     const match = ua.match(/Android\s+([0-9.]+);\s+([^;)]+)/);
     if (match) {
       const version = match[1];
       let model = match[2].split('Build/')[0].trim();
       
       // If the model name is generic (like "wv" or "K"), use a descriptive fallback
-      if (model.length < 2 || /^(Mobile|wv|K)$/i.test(model)) {
+      if (model.length < 2 || /^(Mobile|wv|K|Android)$/i.test(model)) {
         return `Android ${version} Device`;
       }
       return model;
