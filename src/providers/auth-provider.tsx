@@ -35,7 +35,7 @@ const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 
 /**
- * RESTORED: User-provided working normalization function.
+ * USER RESTORED: Working normalization function.
  * Surgically extracts the Base64 content from PHP binary markers and handles double-encoding.
  */
 function normalizeBase64URL(str: string): string {
@@ -76,7 +76,6 @@ function prepareWebAuthnOptions(obj: any): any {
   const normalized: any = {};
   for (const key in obj) {
     const val = obj[key];
-    // These fields are expected to be binary-encoded as Base64URL
     const isBinaryField = ['challenge', 'id'].includes(key);
     
     if (isBinaryField && typeof val === 'string') {
@@ -98,13 +97,10 @@ function getDeviceName(): string {
   if (/iPhone|iPad/.test(ua)) return 'Apple Device';
   
   if (/Android/.test(ua)) {
-    // Attempt to extract the hardware model (e.g., "Pixel 8 Pro", "SM-G991B")
     const match = ua.match(/Android\s+([0-9.]+);\s+([^;)]+)/);
     if (match) {
       const version = match[1];
       let model = match[2].split('Build/')[0].trim();
-      
-      // If the model name is generic (like "wv" or "K"), use a descriptive fallback
       if (model.length < 2 || /^(Mobile|wv|K|Android)$/i.test(model)) {
         return `Android ${version} Device`;
       }
@@ -156,9 +152,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (!data || typeof data !== 'object') return;
 
-      if (data.status === 'success' && data.purpose === 'authenticated') {
+      // Handle case-insensitive "Authenticated" or "authenticated"
+      const isSuccess = data.status === 'success' || data.Status === 'success';
+      const isAuthPurpose = data.purpose?.toLowerCase() === 'authenticated';
+
+      if (isSuccess && isAuthPurpose) {
         const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
-        login({ ...data, email });
+        // Ensure session exists even if server skips it
+        const session = data.session || 'passkey-session';
+        login({ ...data, email, session });
       } else if (data.status === 'fail' || data.purpose === 'logoff') {
         logout();
       }
@@ -188,10 +190,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       const responseData = await AuthApi.getPasskeyOptions(email, deviceName);
-      // The server might return the options directly or wrapped in a publicKey object
       const rawOptions = responseData.publicKey || responseData;
-      
       const options = prepareWebAuthnOptions(rawOptions);
+      
       const isRegistration = !!(options.user && options.user.id);
       
       let credentialResponse;
@@ -204,14 +205,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       if (result.status === 'success') {
-        login({ ...result, email: result.email || email, method: 'passkey' } as UserSession);
+        // Log explicitly to help debug missing session IDs
+        console.log('PASSKEY LOGIN SUCCESS:', result);
+        
+        login({ 
+          ...result, 
+          email: result.email || email, 
+          session: result.session || 'passkey-session', // Fallback for partial server responses
+          method: 'passkey' 
+        } as UserSession);
+        
         router.replace('/');
       } else {
         throw new Error(result.purpose || 'Verification failed');
       }
     } catch (error: any) {
       console.error('DIAGNOSTIC ERROR: [AuthProvider] Passkey Flow Error:', error);
-      setAuthError('auth-failed');
+      setAuthError(error.message || 'auth-failed');
       toast({
         title: 'Authentication Error',
         description: error.message || 'The passkey flow failed or timed out.',

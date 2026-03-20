@@ -57,13 +57,13 @@ export function LoginForm() {
       localStorage.setItem(EMAIL_STORAGE_KEY, data.email);
       
       if (loginMethod === 'passkey') {
+        // Redirection is handled inside passkeyLogin in the Provider
         await passkeyLogin(data.email);
-        router.push('/');
       } else if (loginMethod === 'code') {
         router.push(`/?verification=true&email=${encodeURIComponent(data.email)}`);
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login form error:', error);
     } finally {
       setIsSubmitting(false);
     }

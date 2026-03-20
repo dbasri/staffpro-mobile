@@ -5,7 +5,7 @@ import type { UserSession } from '@/types/session';
 
 /**
  * Surgically extracts the first valid JSON object from a string.
- * Resilient against PHP warnings or trailing stream data.
+ * Resilient against PHP warnings, trailing stream data, or script tags.
  */
 function parseFirstJson(accumulated: string) {
   const start = accumulated.indexOf('{');
@@ -17,7 +17,11 @@ function parseFirstJson(accumulated: string) {
       const jsonStr = accumulated.substring(start, end + 1);
       const parsed = JSON.parse(jsonStr);
       // Ensure we have a valid object with expected status/purpose keys
-      if (parsed && typeof parsed === 'object' && ('status' in parsed || 'purpose' in parsed)) {
+      // Added case-insensitive key check for resilience
+      const hasStatus = 'status' in parsed || 'Status' in parsed;
+      const hasPurpose = 'purpose' in parsed || 'Purpose' in parsed;
+      
+      if (parsed && typeof parsed === 'object' && (hasStatus || hasPurpose)) {
         return parsed;
       }
       end = accumulated.lastIndexOf('}', end - 1);
@@ -69,7 +73,9 @@ async function fetchSurgically(url: string, options: RequestInit) {
       if (done) break;
     }
     
-    return JSON.parse(accumulated);
+    // Fallback: If the stream finishes without finding JSON via parseFirstJson,
+    // try to parse the whole thing.
+    return JSON.parse(accumulated.trim());
   } finally {
     reader.releaseLock();
   }
