@@ -169,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (!data || typeof data !== 'object') return;
 
-      const isSuccess = data.status === 'success' || data.Status === 'success';
+      const isSuccess = data.status?.toLowerCase() === 'success' || data.Status?.toLowerCase() === 'success';
       const purposeLower = data.purpose?.toLowerCase() || '';
       const isAuthPurpose = purposeLower === 'authenticated';
 
@@ -178,7 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // CRITICAL: Ensure session exists for partial server responses
         const session = data.session || 'passkey-session';
         login({ ...data, email, session });
-      } else if (data.status === 'fail' || data.purpose === 'logoff') {
+      } else if (data.status?.toLowerCase() === 'fail' || data.purpose?.toLowerCase() === 'logoff') {
         logout();
       }
     };
@@ -192,7 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const sessionString = localStorage.getItem(SESSION_STORAGE_KEY);
       if (sessionString) {
         const session = JSON.parse(sessionString);
-        if (session.status === 'success') setUser(session);
+        if (session.status?.toLowerCase() === 'success' || session.Status?.toLowerCase() === 'success') setUser(session);
       }
     } catch (error) {
       localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -221,7 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
-      const isSuccess = result.status === 'success' || result.Status === 'success';
+      const isSuccess = result.status?.toLowerCase() === 'success' || result.Status?.toLowerCase() === 'success';
       if (isSuccess) {
         login({ 
           ...result, 
