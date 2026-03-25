@@ -33,10 +33,11 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
+const DEVICE_ID_KEY = 'staffpro-device-id';
 
 /**
- * USER RESTORED: Working normalization function.
- * Surgically extracts the Base64 content from PHP binary markers and handles double-encoding.
+ * RESTORED WORKING NORMALIZATION: Exact logic provided by the user.
+ * Surgically extracts Base64 content from binary markers and handles padding.
  */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
@@ -88,31 +89,47 @@ function prepareWebAuthnOptions(obj: any): any {
 }
 
 /**
- * Extracts specific hardware model or OS version from User Agent.
+ * Generates or retrieves a unique 4-digit device suffix from local storage.
+ * Combines hardware info with this suffix to ensure disambiguation.
  */
 function getDeviceName(): string {
   if (typeof window === 'undefined') return 'Unknown Device';
+  
+  let deviceSuffix = '';
+  try {
+    deviceSuffix = localStorage.getItem(DEVICE_ID_KEY) || '';
+    if (!deviceSuffix) {
+      deviceSuffix = Math.floor(1000 + Math.random() * 9000).toString();
+      localStorage.setItem(DEVICE_ID_KEY, deviceSuffix);
+    }
+  } catch (e) {
+    deviceSuffix = '0000';
+  }
+
   const ua = window.navigator.userAgent;
+  let model = 'Mobile Device';
   
-  if (/iPhone|iPad/.test(ua)) return 'Apple Device';
-  
-  if (/Android/.test(ua)) {
+  if (/iPhone|iPad/.test(ua)) {
+    model = 'Apple Device';
+  } else if (/Android/.test(ua)) {
     const match = ua.match(/Android\s+([0-9.]+);\s+([^;)]+)/);
     if (match) {
-      const version = match[1];
-      let model = match[2].split('Build/')[0].trim();
-      if (model.length < 2 || /^(Mobile|wv|K|Android)$/i.test(model)) {
-        return `Android ${version} Device`;
+      const hwModel = match[2].split('Build/')[0].trim();
+      if (hwModel.length < 2 || /^(Mobile|wv|K|Android)$/i.test(hwModel)) {
+        model = `Android ${match[1]} Device`;
+      } else {
+        model = hwModel;
       }
-      return model;
+    } else {
+      model = 'Android Device';
     }
-    return 'Android Device';
+  } else if (/Windows NT/.test(ua)) {
+    model = 'Windows PC';
+  } else if (/Macintosh/.test(ua)) {
+    model = 'Mac';
   }
   
-  if (/Windows NT/.test(ua)) return 'Windows PC';
-  if (/Macintosh/.test(ua)) return 'Mac';
-  
-  return 'Mobile Browser';
+  return `${model} ${deviceSuffix}`;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -152,13 +169,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (!data || typeof data !== 'object') return;
 
-      // Handle case-insensitive "Authenticated" or "authenticated"
       const isSuccess = data.status === 'success' || data.Status === 'success';
-      const isAuthPurpose = data.purpose?.toLowerCase() === 'authenticated';
+      const purposeLower = data.purpose?.toLowerCase() || '';
+      const isAuthPurpose = purposeLower === 'authenticated';
 
       if (isSuccess && isAuthPurpose) {
         const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
-        // Ensure session exists even if server skips it
+        // CRITICAL: Ensure session exists for partial server responses
         const session = data.session || 'passkey-session';
         login({ ...data, email, session });
       } else if (data.status === 'fail' || data.purpose === 'logoff') {
@@ -204,14 +221,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
-      if (result.status === 'success') {
-        // Log explicitly to help debug missing session IDs
-        console.log('PASSKEY LOGIN SUCCESS:', result);
-        
+      const isSuccess = result.status === 'success' || result.Status === 'success';
+      if (isSuccess) {
         login({ 
           ...result, 
           email: result.email || email, 
-          session: result.session || 'passkey-session', // Fallback for partial server responses
+          session: result.session || 'passkey-session',
           method: 'passkey' 
         } as UserSession);
         

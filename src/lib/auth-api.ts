@@ -16,8 +16,7 @@ function parseFirstJson(accumulated: string) {
     try {
       const jsonStr = accumulated.substring(start, end + 1);
       const parsed = JSON.parse(jsonStr);
-      // Ensure we have a valid object with expected status/purpose keys
-      // Added case-insensitive key check for resilience
+      // Resilient check for success/purpose markers
       const hasStatus = 'status' in parsed || 'Status' in parsed;
       const hasPurpose = 'purpose' in parsed || 'Purpose' in parsed;
       
@@ -73,8 +72,6 @@ async function fetchSurgically(url: string, options: RequestInit) {
       if (done) break;
     }
     
-    // Fallback: If the stream finishes without finding JSON via parseFirstJson,
-    // try to parse the whole thing.
     return JSON.parse(accumulated.trim());
   } finally {
     reader.releaseLock();
