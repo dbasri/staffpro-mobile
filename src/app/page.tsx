@@ -139,7 +139,7 @@ function MainPage() {
       )}
 
       {isAuthenticated && !isLoggingOut && (
-        <div className="absolute bottom-6 left-0 right-0 z-20 flex justify-center px-4 pointer-events-none">
+        <div className="absolute z-20 pointer-events-none px-4 w-full portrait:bottom-6 portrait:left-0 portrait:right-0 portrait:flex portrait:justify-center landscape:top-6 landscape:right-0 landscape:left-auto landscape:flex landscape:justify-end">
           <Button
             onClick={() => setIsLoggingOut(true)}
             style={{ backgroundColor: '#35ade9' }}
