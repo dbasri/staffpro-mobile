@@ -27,7 +27,6 @@ function MainPage() {
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
-  // Prevent automatic redirects if authenticated so the user stays on the home view
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
       router.replace('/');
@@ -43,8 +42,6 @@ function MainPage() {
     }
   }, [isLoggingOut, logout]);
 
-  // Only redirect to login if we are NOT loading, NOT authenticated, NOT verifying, NOT logging out, AND NO errors are present
-  // This ensures diagnostic logs are visible if an error occurs.
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
       router.replace('/login');
@@ -74,7 +71,8 @@ function MainPage() {
   } else if (isAuthenticated && user) {
     const params = new URLSearchParams({
       session: user.session,
-      email: currentEmail,
+      email: user.email || currentEmail,
+      content: 'true',
       origin: typeof window !== 'undefined' ? window.location.origin : '',
     });
     url = `${staffproBaseUrl}?${params.toString()}`;
@@ -96,7 +94,6 @@ function MainPage() {
     return <GlobalLoader />;
   }
 
-  // Display persistent error state to block redirects and preserve console logs
   if (authError) {
     return (
       <main className="relative h-dvh w-full overflow-hidden bg-background flex items-center justify-center p-6 text-center">
@@ -139,7 +136,7 @@ function MainPage() {
       )}
 
       {isAuthenticated && !isLoggingOut && (
-        <div className="absolute z-20 pointer-events-none px-4 w-full portrait:bottom-6 portrait:left-0 portrait:right-0 portrait:flex portrait:justify-center landscape:top-6 landscape:right-0 landscape:left-auto landscape:flex landscape:justify-end">
+        <div className="absolute z-20 pointer-events-none px-4 w-full portrait:bottom-6 portrait:left-0 portrait:right-0 portrait:flex portrait:justify-center landscape:top-6 landscape:right-6 landscape:left-auto landscape:flex landscape:justify-end">
           <Button
             onClick={() => setIsLoggingOut(true)}
             style={{ backgroundColor: '#35ade9' }}
