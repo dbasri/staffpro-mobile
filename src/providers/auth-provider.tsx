@@ -164,7 +164,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let data = event.data;
       if (typeof data === 'string') {
         try {
-          // Robust JSON extraction from message string
           const start = data.indexOf('{');
           const end = data.lastIndexOf('}');
           if (start !== -1 && end !== -1 && end > start) {
@@ -179,6 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const purpose = (data.purpose || data.Purpose || '').toString().toLowerCase();
       
       // PRIORITY 1: DETECTION OF LOGOFF SIGNALS
+      // Specifically handles your server response: {"status":"success", ..., "purpose":"logoff"}
       const isLogoffSignal = 
         status === 'logoff' || 
         status === 'fail' || 
@@ -255,7 +255,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(result.purpose || 'Verification failed');
       }
     } catch (error: any) {
-      console.error('DIAGNOSTIC ERROR:', error);
       setAuthError(error.message || 'auth-failed');
       toast({
         title: 'Authentication Error',

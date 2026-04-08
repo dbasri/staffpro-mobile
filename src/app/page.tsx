@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import WebView from '@/components/web-view';
@@ -24,7 +24,7 @@ function MainPage() {
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   
-  // A 'launch' nonce that is unique to this specific application instance/mount (Cold Start).
+  // Cold Start Nonce
   const [launchNonce] = useState(() => Date.now().toString());
 
   const isVerifying = searchParams.has('verification');
@@ -60,48 +60,51 @@ function MainPage() {
     router.replace('/login');
   };
   
-  let url: string | null = null;
-  const storedEmail = typeof window !== 'undefined' ? localStorage.getItem('staffpro-verification-email') : '';
-  const currentEmail = user?.email || emailForVerification || storedEmail || '';
-  
-  // Detect if this is a fresh login vs a session restoration
-  const isNewLogin = typeof window !== 'undefined' && sessionStorage.getItem('staffpro-new-login') === 'true';
+  const url = useMemo(() => {
+    const storedEmail = typeof window !== 'undefined' ? localStorage.getItem('staffpro-verification-email') : '';
+    const currentEmail = user?.email || emailForVerification || storedEmail || '';
+    const isNewLogin = typeof window !== 'undefined' && sessionStorage.getItem('staffpro-new-login') === 'true';
 
-  if (isLoggingOut && user) {
-    const params = new URLSearchParams({
-      logoff: 'true',
-      email: currentEmail,
-      session: user.session,
-    });
-    url = `${staffproBaseUrl}?${params.toString()}`;
-  } else if (isAuthenticated && user) {
-    const params = new URLSearchParams({
-      session: user.session,
-      email: user.email || currentEmail,
-      launch: launchNonce,
-      origin: typeof window !== 'undefined' ? window.location.origin : '',
-    });
-    
-    // Crucially: only append 'content=true' for fresh logins. 
-    // Cold starts (reloads) only send the 'launch' nonce.
-    if (isNewLogin) {
-      params.append('content', 'true');
-    }
-    
-    url = `${staffproBaseUrl}?${params.toString()}`;
-  } else if (isVerifying && emailForVerification) {
-    if (!isAuthenticated) {
+    if (isLoggingOut && user) {
       const params = new URLSearchParams({
-        verification: 'true',
+        logoff: 'true',
         email: currentEmail,
+        session: user.session,
+      });
+      return `${staffproBaseUrl}?${params.toString()}`;
+    } 
+    
+    if (isAuthenticated && user) {
+      const params = new URLSearchParams({
+        session: user.session,
+        email: user.email || currentEmail,
+        launch: launchNonce,
         origin: typeof window !== 'undefined' ? window.location.origin : '',
       });
-      if (verificationCode) {
-        params.append('code', verificationCode);
+      
+      if (isNewLogin) {
+        params.append('content', 'true');
       }
-      url = `${staffproBaseUrl}?${params.toString()}`;
+      
+      return `${staffproBaseUrl}?${params.toString()}`;
+    } 
+    
+    if (isVerifying && emailForVerification) {
+      if (!isAuthenticated) {
+        const params = new URLSearchParams({
+          verification: 'true',
+          email: currentEmail,
+          origin: typeof window !== 'undefined' ? window.location.origin : '',
+        });
+        if (verificationCode) {
+          params.append('code', verificationCode);
+        }
+        return `${staffproBaseUrl}?${params.toString()}`;
+      }
     }
-  }
+
+    return null;
+  }, [isAuthenticated, user, isLoggingOut, isVerifying, emailForVerification, verificationCode, launchNonce]);
 
   if (isAuthLoading) {
     return <GlobalLoader />;
