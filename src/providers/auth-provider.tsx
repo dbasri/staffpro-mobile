@@ -34,6 +34,7 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 const SESSION_STORAGE_KEY = 'staffpro-session';
 const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 const DEVICE_ID_KEY = 'staffpro-device-id';
+const NEW_LOGIN_KEY = 'staffpro-new-login';
 
 /**
  * RESTORED WORKING NORMALIZATION: Exact logic provided by the user.
@@ -90,7 +91,6 @@ function prepareWebAuthnOptions(obj: any): any {
 
 /**
  * Generates or retrieves a unique 4-digit device suffix from local storage.
- * Combines hardware info with this suffix to ensure disambiguation.
  */
 function getDeviceName(): string {
   if (typeof window === 'undefined') return 'Unknown Device';
@@ -145,12 +145,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthError(null);
     try {
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+      // Signal to the UI that this is a fresh login event
+      sessionStorage.setItem(NEW_LOGIN_KEY, 'true');
     } catch (error) {}
   }, []);
 
   const logout = useCallback(() => {
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
+      sessionStorage.removeItem(NEW_LOGIN_KEY);
     } catch (error) {}
     setUser(null);
     setAuthError(null);
@@ -171,13 +174,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const statusLower = (data.status || data.Status || '').toLowerCase();
       const purposeLower = (data.purpose || data.Purpose || '').toLowerCase();
+      
       const isSuccess = statusLower === 'success';
       const isAuthPurpose = purposeLower === 'authenticated';
-      const isLogoffSignal = statusLower === 'fail' || purposeLower === 'logoff';
+      const isLogoffSignal = statusLower === 'fail' || purposeLower === 'logoff' || statusLower === 'logoff';
 
       if (isSuccess && isAuthPurpose) {
         const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
-        // CRITICAL: Ensure session exists for partial server responses
         const session = data.session || 'passkey-session';
         login({ ...data, email, session });
       } else if (isLogoffSignal) {
@@ -195,7 +198,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (sessionString) {
         const session = JSON.parse(sessionString);
         const statusLower = (session.status || session.Status || '').toLowerCase();
-        if (statusLower === 'success') setUser(session);
+        if (statusLower === 'success') {
+          setUser(session);
+        }
       }
     } catch (error) {
       localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -225,9 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await AuthApi.verifyPasskey(credentialResponse, email, deviceName);
       
       const statusLower = (result.status || result.Status || '').toLowerCase();
-      const isSuccess = statusLower === 'success';
-      
-      if (isSuccess) {
+      if (statusLower === 'success') {
         login({ 
           ...result, 
           email: result.email || email, 
@@ -240,7 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(result.purpose || 'Verification failed');
       }
     } catch (error: any) {
-      console.error('DIAGNOSTIC ERROR: [AuthProvider] Passkey Flow Error:', error);
+      console.error('DIAGNOSTIC ERROR:', error);
       setAuthError(error.message || 'auth-failed');
       toast({
         title: 'Authentication Error',

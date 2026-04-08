@@ -25,7 +25,6 @@ function MainPage() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   
   // A 'launch' nonce that is unique to this specific application instance/mount (Cold Start).
-  // This helps ensure that the WebView iframe requests a fresh root URL on launch.
   const [launchNonce] = useState(() => Date.now().toString());
 
   const isVerifying = searchParams.has('verification');
@@ -65,6 +64,9 @@ function MainPage() {
   const storedEmail = typeof window !== 'undefined' ? localStorage.getItem('staffpro-verification-email') : '';
   const currentEmail = user?.email || emailForVerification || storedEmail || '';
   
+  // Detect if this is a fresh login vs a session restoration
+  const isNewLogin = typeof window !== 'undefined' && sessionStorage.getItem('staffpro-new-login') === 'true';
+
   if (isLoggingOut && user) {
     const params = new URLSearchParams({
       logoff: 'true',
@@ -76,11 +78,16 @@ function MainPage() {
     const params = new URLSearchParams({
       session: user.session,
       email: user.email || currentEmail,
-      // We removed 'content: true' because it overrides the server's Home screen logic.
-      // The 'launch' parameter alone is used to signal a fresh start.
       launch: launchNonce,
       origin: typeof window !== 'undefined' ? window.location.origin : '',
     });
+    
+    // Crucially: only append 'content=true' for fresh logins. 
+    // Cold starts (reloads) only send the 'launch' nonce.
+    if (isNewLogin) {
+      params.append('content', 'true');
+    }
+    
     url = `${staffproBaseUrl}?${params.toString()}`;
   } else if (isVerifying && emailForVerification) {
     if (!isAuthenticated) {
@@ -109,7 +116,7 @@ function MainPage() {
           </div>
           <h2 className="text-2xl font-bold text-destructive">Authentication Error</h2>
           <p className="text-muted-foreground text-sm">
-            The passkey flow was interrupted or timed out. Check the diagnostic logs in the browser console for details.
+            The passkey flow was interrupted or timed out.
           </p>
           <Button onClick={handleBackToLogin} className="w-full">
             Return to Login
