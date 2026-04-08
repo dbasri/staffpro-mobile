@@ -164,34 +164,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let data = event.data;
       if (typeof data === 'string') {
         try {
-          const jsonMatch = data.match(/\{.*\}/);
-          if (jsonMatch) data = JSON.parse(jsonMatch[0]);
-          else return;
+          // Robust JSON extraction from message string
+          const start = data.indexOf('{');
+          const end = data.lastIndexOf('}');
+          if (start !== -1 && end !== -1 && end > start) {
+            data = JSON.parse(data.substring(start, end + 1));
+          } else return;
         } catch (e) { return; }
       }
+      
       if (!data || typeof data !== 'object') return;
 
-      const statusLower = (data.status || data.Status || '').toLowerCase();
-      const purposeLower = (data.purpose || data.Purpose || '').toLowerCase();
+      const status = (data.status || data.Status || '').toString().toLowerCase();
+      const purpose = (data.purpose || data.Purpose || '').toString().toLowerCase();
       
-      const isSuccess = statusLower === 'success';
-      const isAuthPurpose = purposeLower === 'authenticated';
-      
-      // Robust detection of logoff signals from the server
+      // PRIORITY 1: DETECTION OF LOGOFF SIGNALS
       const isLogoffSignal = 
-        statusLower === 'fail' || 
-        statusLower === 'logoff' || 
-        purposeLower === 'logoff' || 
-        purposeLower === 'logout' || 
+        status === 'logoff' || 
+        status === 'fail' || 
+        purpose === 'logoff' || 
+        purpose === 'logout' || 
         data.logoff === true || 
         data.Logoff === true;
 
-      if (isSuccess && isAuthPurpose) {
+      if (isLogoffSignal) {
+        logout();
+        return;
+      }
+
+      // PRIORITY 2: DETECTION OF SUCCESSFUL AUTHENTICATION
+      if (status === 'success' && purpose === 'authenticated') {
         const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
         const session = data.session || 'passkey-session';
         login({ ...data, email, session });
-      } else if (isLogoffSignal) {
-        logout();
       }
     };
 
