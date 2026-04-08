@@ -24,7 +24,7 @@ function MainPage() {
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   
-  // Cold Start Nonce
+  // Cold Start Nonce - Stable across app task switching, unique across cold starts
   const [launchNonce] = useState(() => Date.now().toString());
 
   const isVerifying = searchParams.has('verification');
@@ -63,6 +63,8 @@ function MainPage() {
   const url = useMemo(() => {
     const storedEmail = typeof window !== 'undefined' ? localStorage.getItem('staffpro-verification-email') : '';
     const currentEmail = user?.email || emailForVerification || storedEmail || '';
+    
+    // Check if this is a fresh authentication event
     const isNewLogin = typeof window !== 'undefined' && sessionStorage.getItem('staffpro-new-login') === 'true';
 
     if (isLoggingOut && user) {
@@ -82,6 +84,7 @@ function MainPage() {
         origin: typeof window !== 'undefined' ? window.location.origin : '',
       });
       
+      // Only provide content=true on fresh logins, NOT on swipe/close reloads
       if (isNewLogin) {
         params.append('content', 'true');
       }
@@ -129,8 +132,8 @@ function MainPage() {
     );
   }
 
-  if (url === null && !isAuthenticated) {
-      return <GlobalLoader />;
+  if (!isAuthenticated && !isVerifying) {
+    return <GlobalLoader />;
   }
   
   return (

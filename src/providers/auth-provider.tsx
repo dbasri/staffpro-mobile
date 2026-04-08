@@ -162,6 +162,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
+      
+      // Handle both string and object data types from postMessage
       if (typeof data === 'string') {
         try {
           const start = data.indexOf('{');
@@ -177,22 +179,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const status = (data.status || data.Status || '').toString().toLowerCase();
       const purpose = (data.purpose || data.Purpose || '').toString().toLowerCase();
       
-      // PRIORITY 1: DETECTION OF LOGOFF SIGNALS
-      // Specifically handles your server response: {"status":"success", ..., "purpose":"logoff"}
+      // DETECT LOGOFF SIGNALS FROM SERVER JSON
+      // Handles: {"status":"success", ..., "purpose":"logoff"}
       const isLogoffSignal = 
         status === 'logoff' || 
         status === 'fail' || 
         purpose === 'logoff' || 
         purpose === 'logout' || 
         data.logoff === true || 
-        data.Logoff === true;
+        data.Logoff === true ||
+        data.logout === true;
 
       if (isLogoffSignal) {
         logout();
         return;
       }
 
-      // PRIORITY 2: DETECTION OF SUCCESSFUL AUTHENTICATION
+      // DETECTION OF SUCCESSFUL AUTHENTICATION
       if (status === 'success' && purpose === 'authenticated') {
         const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
         const session = data.session || 'passkey-session';
