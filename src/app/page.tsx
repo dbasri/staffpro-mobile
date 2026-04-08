@@ -84,7 +84,8 @@ function MainPage() {
     const params = new URLSearchParams({
       session: user.session,
       email: user.email || currentEmail,
-      content: 'true',
+      // We removed 'content: true' because it overrides the server's Home screen logic.
+      // The 'launch' parameter alone is now used to signal a fresh start.
       launch: launchNonce,
       origin: typeof window !== 'undefined' ? window.location.origin : '',
     });
