@@ -29,18 +29,10 @@ function MainPage() {
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
-  // Detect app launch/resume to force a reset to the Home screen
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && isAuthenticated) {
-        // Increment key to force WebView to reset to the base authenticated URL
-        setRefreshKey(prev => prev + 1);
-      }
-    };
-
-    window.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => window.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isAuthenticated]);
+  // Note: We removed the visibilitychange listener to ensure that if a user 
+  // leaves the app running but switches to another app, they are NOT reset 
+  // to the Home screen. The reset will now only happen on a cold start 
+  // (when the app process is launched).
 
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
