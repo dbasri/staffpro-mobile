@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
@@ -24,21 +23,14 @@ function MainPage() {
   const router = useRouter();
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
-
+  
   // A 'launch' nonce that is unique to this specific application instance/mount (Cold Start).
-  // This helps ensure that the WebView iframe requests a fresh root URL on launch
-  // rather than restoring internal history state from a previous run.
+  // This helps ensure that the WebView iframe requests a fresh root URL on launch.
   const [launchNonce] = useState(() => Date.now().toString());
 
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
-  // Note: We removed the visibilitychange listener to ensure that if a user 
-  // leaves the app running but switches to another app, they are NOT reset 
-  // to the Home screen. The reset will now only happen on a cold start 
-  // (when the app process is launched).
-
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
       router.replace('/');
@@ -85,7 +77,7 @@ function MainPage() {
       session: user.session,
       email: user.email || currentEmail,
       // We removed 'content: true' because it overrides the server's Home screen logic.
-      // The 'launch' parameter alone is now used to signal a fresh start.
+      // The 'launch' parameter alone is used to signal a fresh start.
       launch: launchNonce,
       origin: typeof window !== 'undefined' ? window.location.origin : '',
     });
@@ -135,7 +127,7 @@ function MainPage() {
     <main className="relative h-dvh w-full overflow-hidden">
       {url && (
         <WebView 
-          key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${refreshKey}`} 
+          key={`staffpro-webview-${isAuthenticated ? 'auth' : 'guest'}-${launchNonce}`} 
           url={url} 
         />
       )}
