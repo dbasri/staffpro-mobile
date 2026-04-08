@@ -26,6 +26,11 @@ function MainPage() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // A 'launch' nonce that is unique to this specific application instance/mount (Cold Start).
+  // This helps ensure that the WebView iframe requests a fresh root URL on launch
+  // rather than restoring internal history state from a previous run.
+  const [launchNonce] = useState(() => Date.now().toString());
+
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
@@ -80,6 +85,7 @@ function MainPage() {
       session: user.session,
       email: user.email || currentEmail,
       content: 'true',
+      launch: launchNonce,
       origin: typeof window !== 'undefined' ? window.location.origin : '',
     });
     url = `${staffproBaseUrl}?${params.toString()}`;
