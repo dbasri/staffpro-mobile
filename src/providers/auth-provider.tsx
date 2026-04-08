@@ -37,7 +37,7 @@ const DEVICE_ID_KEY = 'staffpro-device-id';
 const NEW_LOGIN_KEY = 'staffpro-new-login';
 
 /**
- * RESTORED WORKING NORMALIZATION: Exact logic provided by the user.
+ * EXACT WORKING NORMALIZATION PROVIDED BY USER.
  * Surgically extracts Base64 content from binary markers and handles padding.
  */
 function normalizeBase64URL(str: string): string {
@@ -145,7 +145,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthError(null);
     try {
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
-      // Signal to the UI that this is a fresh login event
       sessionStorage.setItem(NEW_LOGIN_KEY, 'true');
     } catch (error) {}
   }, []);
@@ -177,7 +176,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const isSuccess = statusLower === 'success';
       const isAuthPurpose = purposeLower === 'authenticated';
-      const isLogoffSignal = statusLower === 'fail' || purposeLower === 'logoff' || statusLower === 'logoff';
+      
+      // Robust detection of logoff signals from the server
+      const isLogoffSignal = 
+        statusLower === 'fail' || 
+        statusLower === 'logoff' || 
+        purposeLower === 'logoff' || 
+        purposeLower === 'logout' || 
+        data.logoff === true || 
+        data.Logoff === true;
 
       if (isSuccess && isAuthPurpose) {
         const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
