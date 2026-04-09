@@ -124,15 +124,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const isAuthenticated = !!user;
 
-  const login = useCallback((sessionData: UserSession) => {
-    setUser(sessionData);
-    setAuthError(null);
-    try {
-      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
-      sessionStorage.setItem(NEW_LOGIN_KEY, 'true');
-    } catch (error) {}
-  }, []);
-
   const logout = useCallback(() => {
     toast({ title: "DEBUG: Logout Triggered", description: "Clearing session and redirecting." });
     try {
@@ -144,11 +135,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.replace('/login');
   }, [router, toast]);
 
+  const login = useCallback((sessionData: UserSession) => {
+    setUser(sessionData);
+    setAuthError(null);
+    try {
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+      sessionStorage.setItem(NEW_LOGIN_KEY, 'true');
+    } catch (error) {}
+  }, []);
+
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
       
-      // DIAGNOSTIC: Immediate root check for ANY postMessage arrival
       if (data) {
         toast({ title: "DEBUG: Message Received", description: "A signal has arrived at the Provider." });
       }
@@ -182,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data.logout === true;
 
       if (isLogoffSignal) {
-        toast({ title: "DEBUG: Logoff Signal Identified", description: "Executing logout sequence." });
+        toast({ title: "DEBUG: Logoff Identified", description: "Executing logout sequence." });
         logout();
         return;
       }

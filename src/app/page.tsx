@@ -33,7 +33,6 @@ function MainPage() {
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
-  // DIAGNOSTIC: Monitor authentication state changes explicitly
   useEffect(() => {
     if (!isAuthenticated && !isAuthLoading && !isVerifying && !isLoggingOut) {
       toast({ 
