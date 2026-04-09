@@ -13,11 +13,6 @@ import { AuthApi } from '@/lib/auth-api';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 
-// Polyfill check for ReferenceError: _async_to_generator occurring in some environments
-if (typeof window !== 'undefined' && !(window as any)._async_to_generator) {
-  (window as any)._async_to_generator = (fn: any) => fn;
-}
-
 interface AuthContextType {
   user: UserSession | null;
   isAuthenticated: boolean;
@@ -36,10 +31,6 @@ const EMAIL_STORAGE_KEY = 'staffpro-verification-email';
 const DEVICE_ID_KEY = 'staffpro-device-id';
 const NEW_LOGIN_KEY = 'staffpro-new-login';
 
-/**
- * EXACT WORKING NORMALIZATION PROVIDED BY USER.
- * Surgically extracts Base64 content from binary markers and handles padding.
- */
 function normalizeBase64URL(str: string): string {
   if (!str || typeof str !== 'string') return str;
   
@@ -50,7 +41,6 @@ function normalizeBase64URL(str: string): string {
     
     try {
       const decoded = atob(paddedB64);
-      // If it's a printable Base64URL string, use it. Otherwise use the original b64 part.
       if (/^[A-Za-z0-9\-_]{10,}$/.test(decoded)) {
         cleanStr = decoded;
       } else {
@@ -68,9 +58,6 @@ function normalizeBase64URL(str: string): string {
     .trim();
 }
 
-/**
- * Prepares WebAuthn options by normalizing binary-like fields recursively.
- */
 function prepareWebAuthnOptions(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) return obj.map(prepareWebAuthnOptions);
@@ -89,9 +76,6 @@ function prepareWebAuthnOptions(obj: any): any {
   return normalized;
 }
 
-/**
- * Generates or retrieves a unique 4-digit device suffix from local storage.
- */
 function getDeviceName(): string {
   if (typeof window === 'undefined') return 'Unknown Device';
   
@@ -141,7 +125,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   const login = useCallback((sessionData: UserSession) => {
-    console.log('AuthProvider: Logging in session', sessionData.session);
     setUser(sessionData);
     setAuthError(null);
     try {
@@ -151,7 +134,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    console.log('AuthProvider: Executing logout and clearing state');
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
       sessionStorage.removeItem(NEW_LOGIN_KEY);
@@ -165,8 +147,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
       
-      // DIAGNOSTIC 1: Message received
-      // toast({ title: "DEBUG: Message Received", description: "Payload detected from server..." });
+      // DIAGNOSTIC: Root message check
+      if (data) {
+        toast({ title: "DEBUG: Message Received", description: "Signal detected in Provider." });
+      }
       
       if (typeof data === 'string') {
         try {
@@ -183,13 +167,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const status = (data.status || data.Status || '').toString().toLowerCase();
       const purpose = (data.purpose || data.Purpose || '').toString().toLowerCase();
       
-      // DIAGNOSTIC 2: Parsed properties
       if (status || purpose) {
         toast({ title: "DEBUG: Data Parsed", description: `Status: ${status}, Purpose: ${purpose}` });
-        console.log('AuthProvider: Parsed message', { status, purpose });
       }
 
-      // DETECT LOGOFF SIGNALS FROM SERVER JSON
       const isLogoffSignal = 
         status === 'logoff' || 
         status === 'fail' || 
@@ -200,14 +181,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data.logout === true;
 
       if (isLogoffSignal) {
-        toast({ title: "DEBUG: Logoff Detected", description: "Server requested UI reset." });
+        toast({ title: "DEBUG: Logoff Signal Identified", description: "Executing logout sequence." });
         logout();
         return;
       }
 
-      // DETECTION OF SUCCESSFUL AUTHENTICATION
       if (status === 'success' && purpose === 'authenticated') {
-        toast({ title: "DEBUG: Auth Success", description: "Session activated." });
+        toast({ title: "DEBUG: Auth Success", description: "Activating session." });
         const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
         const session = data.session || 'passkey-session';
         login({ ...data, email, session });
@@ -225,7 +205,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const session = JSON.parse(sessionString);
         const statusLower = (session.status || session.Status || '').toLowerCase();
         if (statusLower === 'success') {
-          console.log('AuthProvider: Restored session from storage');
           setUser(session);
         }
       }

@@ -26,26 +26,22 @@ function MainPage() {
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   
-  // Cold Start Nonce - Stable across app task switching, unique across cold starts
   const [launchNonce] = useState(() => {
-    const nonce = Date.now().toString();
-    console.log('MainPage: Initializing with launchNonce', nonce);
-    return nonce;
+    return Date.now().toString();
   });
 
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
-  // DIAGNOSTIC 3: Reacting to Authentication State
+  // DIAGNOSTIC: Monitor authentication state changes
   useEffect(() => {
-    if (!isAuthenticated && !isAuthLoading && !isVerifying) {
-      toast({ title: "DEBUG: Auth State Changed", description: "Authenticated is FALSE. Returning to login." });
+    if (!isAuthenticated && !isAuthLoading && !isVerifying && !isLoggingOut) {
+      toast({ 
+        title: "DEBUG: Auth State Changed", 
+        description: "Authenticated is FALSE. Returning to login." 
+      });
     }
-  }, [isAuthenticated, isAuthLoading, isVerifying, toast]);
-
-  useEffect(() => {
-    console.log('MainPage Render: isAuthenticated', isAuthenticated, 'isLoggingOut', isLoggingOut);
-  }, [isAuthenticated, isLoggingOut]);
+  }, [isAuthenticated, isAuthLoading, isVerifying, isLoggingOut, toast]);
 
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
@@ -64,7 +60,6 @@ function MainPage() {
 
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
-      console.log('MainPage: Not authenticated, redirecting to /login');
       router.replace('/login');
     }
   }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut, authError, router]);
@@ -81,8 +76,6 @@ function MainPage() {
   const url = useMemo(() => {
     const storedEmail = typeof window !== 'undefined' ? localStorage.getItem('staffpro-verification-email') : '';
     const currentEmail = user?.email || emailForVerification || storedEmail || '';
-    
-    // Check if this is a fresh authentication event
     const isNewLogin = typeof window !== 'undefined' && sessionStorage.getItem('staffpro-new-login') === 'true';
 
     if (isLoggingOut && user) {
@@ -102,14 +95,11 @@ function MainPage() {
         origin: typeof window !== 'undefined' ? window.location.origin : '',
       });
       
-      // Only provide content=true on fresh logins, NOT on swipe/close reloads
       if (isNewLogin) {
         params.append('content', 'true');
       }
       
-      const targetUrl = `${staffproBaseUrl}?${params.toString()}`;
-      console.log('MainPage: Generated Authenticated URL', targetUrl);
-      return targetUrl;
+      return `${staffproBaseUrl}?${params.toString()}`;
     } 
     
     if (isVerifying && emailForVerification) {
