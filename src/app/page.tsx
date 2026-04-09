@@ -33,15 +33,16 @@ function MainPage() {
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
-  // DIAGNOSTIC: Monitor authentication state changes
+  // DIAGNOSTIC: Monitor authentication state changes explicitly
   useEffect(() => {
     if (!isAuthenticated && !isAuthLoading && !isVerifying && !isLoggingOut) {
       toast({ 
         title: "DEBUG: Auth State Changed", 
-        description: "Authenticated is FALSE. Returning to login." 
+        description: "Authenticated is now FALSE. Triggering redirect." 
       });
+      router.replace('/login');
     }
-  }, [isAuthenticated, isAuthLoading, isVerifying, isLoggingOut, toast]);
+  }, [isAuthenticated, isAuthLoading, isVerifying, isLoggingOut, toast, router]);
 
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
@@ -57,12 +58,6 @@ function MainPage() {
       return () => clearTimeout(timer);
     }
   }, [isLoggingOut, logout]);
-
-  useEffect(() => {
-    if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
-      router.replace('/login');
-    }
-  }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut, authError, router]);
 
   const handleCodeSubmit = (code: string) => {
     setVerificationCode(code);

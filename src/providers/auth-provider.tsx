@@ -134,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    toast({ title: "DEBUG: Logout Triggered", description: "Clearing session and redirecting." });
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
       sessionStorage.removeItem(NEW_LOGIN_KEY);
@@ -141,15 +142,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setAuthError(null);
     router.replace('/login');
-  }, [router]);
+  }, [router, toast]);
 
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
       
-      // DIAGNOSTIC: Root message check
+      // DIAGNOSTIC: Immediate root check for ANY postMessage arrival
       if (data) {
-        toast({ title: "DEBUG: Message Received", description: "Signal detected in Provider." });
+        toast({ title: "DEBUG: Message Received", description: "A signal has arrived at the Provider." });
       }
       
       if (typeof data === 'string') {
