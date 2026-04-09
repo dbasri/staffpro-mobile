@@ -125,7 +125,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   const logout = useCallback(() => {
-    toast({ title: "DEBUG: Logout Triggered", description: "Clearing session and redirecting." });
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
       sessionStorage.removeItem(NEW_LOGIN_KEY);
@@ -133,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setAuthError(null);
     router.replace('/login');
-  }, [router, toast]);
+  }, [router]);
 
   const login = useCallback((sessionData: UserSession) => {
     setUser(sessionData);
@@ -147,10 +146,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
-      
-      if (data) {
-        toast({ title: "DEBUG: Message Received", description: `From: ${event.origin}` });
-      }
       
       if (typeof data === 'string') {
         try {
@@ -167,13 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const status = (data.status || data.Status || '').toString().toLowerCase();
       const purpose = (data.purpose || data.Purpose || '').toString().toLowerCase();
       
-      if (status || purpose) {
-        toast({ 
-          title: "DEBUG: Data Parsed", 
-          description: `Status: ${status}, Purpose: ${purpose}` 
-        });
-      }
-
       const isLogoffSignal = 
         status === 'logoff' || 
         status === 'fail' || 
@@ -184,13 +172,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data.logout === true;
 
       if (isLogoffSignal) {
-        toast({ title: "DEBUG: Logoff Identified", description: "Executing logout sequence." });
         logout();
         return;
       }
 
       if (status === 'success' && purpose === 'authenticated') {
-        toast({ title: "DEBUG: Auth Success", description: "Activating session." });
         const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
         const session = data.session || 'passkey-session';
         login({ ...data, email, session });
@@ -199,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener('message', handleServerMessage);
     return () => window.removeEventListener('message', handleServerMessage);
-  }, [login, logout, toast]);
+  }, [login, logout]);
 
   useEffect(() => {
     try {

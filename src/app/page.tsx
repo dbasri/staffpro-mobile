@@ -8,7 +8,6 @@ import { Loader2, LogOut, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CodeVerificationOverlay from '@/components/auth/code-verification-overlay';
 import { staffproBaseUrl } from '@/lib/config';
-import { useToast } from '@/hooks/use-toast';
 
 function GlobalLoader() {
   return (
@@ -22,7 +21,6 @@ function MainPage() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout, authError, setAuthError } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { toast } = useToast();
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   
@@ -35,13 +33,9 @@ function MainPage() {
   
   useEffect(() => {
     if (!isAuthenticated && !isAuthLoading && !isVerifying && !isLoggingOut) {
-      toast({ 
-        title: "DEBUG: Auth State Changed", 
-        description: "Authenticated is now FALSE. Triggering redirect." 
-      });
       router.replace('/login');
     }
-  }, [isAuthenticated, isAuthLoading, isVerifying, isLoggingOut, toast, router]);
+  }, [isAuthenticated, isAuthLoading, isVerifying, isLoggingOut, router]);
 
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
