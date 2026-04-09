@@ -166,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let data = event.data;
       
       // DIAGNOSTIC 1: Message received
-      toast({ title: "DEBUG: Message Received", description: "Payload detected from server..." });
+      // toast({ title: "DEBUG: Message Received", description: "Payload detected from server..." });
       
       if (typeof data === 'string') {
         try {
