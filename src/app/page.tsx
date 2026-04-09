@@ -8,6 +8,7 @@ import { Loader2, LogOut, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CodeVerificationOverlay from '@/components/auth/code-verification-overlay';
 import { staffproBaseUrl } from '@/lib/config';
+import { useToast } from '@/hooks/use-toast';
 
 function GlobalLoader() {
   return (
@@ -21,6 +22,7 @@ function MainPage() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout, authError, setAuthError } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { toast } = useToast();
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   
@@ -34,6 +36,13 @@ function MainPage() {
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
+  // DIAGNOSTIC 3: Reacting to Authentication State
+  useEffect(() => {
+    if (!isAuthenticated && !isAuthLoading && !isVerifying) {
+      toast({ title: "DEBUG: Auth State Changed", description: "Authenticated is FALSE. Returning to login." });
+    }
+  }, [isAuthenticated, isAuthLoading, isVerifying, toast]);
+
   useEffect(() => {
     console.log('MainPage Render: isAuthenticated', isAuthenticated, 'isLoggingOut', isLoggingOut);
   }, [isAuthenticated, isLoggingOut]);

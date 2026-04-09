@@ -166,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let data = event.data;
       
       // DIAGNOSTIC 1: Message received
-      // toast({ title: "DEBUG: Message Received", description: "Payload detected from server..." });
+      toast({ title: "DEBUG: Message Received", description: "Payload detected from server..." });
       
       if (typeof data === 'string') {
         try {
@@ -185,6 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // DIAGNOSTIC 2: Parsed properties
       if (status || purpose) {
+        toast({ title: "DEBUG: Data Parsed", description: `Status: ${status}, Purpose: ${purpose}` });
         console.log('AuthProvider: Parsed message', { status, purpose });
       }
 
