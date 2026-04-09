@@ -149,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let data = event.data;
       
       if (data) {
-        toast({ title: "DEBUG: Message Received", description: "A signal has arrived at the Provider." });
+        toast({ title: "DEBUG: Message Received", description: `From: ${event.origin}` });
       }
       
       if (typeof data === 'string') {
@@ -168,7 +168,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const purpose = (data.purpose || data.Purpose || '').toString().toLowerCase();
       
       if (status || purpose) {
-        toast({ title: "DEBUG: Data Parsed", description: `Status: ${status}, Purpose: ${purpose}` });
+        toast({ 
+          title: "DEBUG: Data Parsed", 
+          description: `Status: ${status}, Purpose: ${purpose}` 
+        });
       }
 
       const isLogoffSignal = 
