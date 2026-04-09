@@ -25,11 +25,19 @@ function MainPage() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   
   // Cold Start Nonce - Stable across app task switching, unique across cold starts
-  const [launchNonce] = useState(() => Date.now().toString());
+  const [launchNonce] = useState(() => {
+    const nonce = Date.now().toString();
+    console.log('MainPage: Initializing with launchNonce', nonce);
+    return nonce;
+  });
 
   const isVerifying = searchParams.has('verification');
   const emailForVerification = searchParams.get('email');
   
+  useEffect(() => {
+    console.log('MainPage Render: isAuthenticated', isAuthenticated, 'isLoggingOut', isLoggingOut);
+  }, [isAuthenticated, isLoggingOut]);
+
   useEffect(() => {
     if (isAuthenticated && (isVerifying || searchParams.has('email'))) {
       router.replace('/');
@@ -47,6 +55,7 @@ function MainPage() {
 
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated && !isVerifying && !isLoggingOut && !authError) {
+      console.log('MainPage: Not authenticated, redirecting to /login');
       router.replace('/login');
     }
   }, [isAuthLoading, isAuthenticated, isVerifying, isLoggingOut, authError, router]);
@@ -89,7 +98,9 @@ function MainPage() {
         params.append('content', 'true');
       }
       
-      return `${staffproBaseUrl}?${params.toString()}`;
+      const targetUrl = `${staffproBaseUrl}?${params.toString()}`;
+      console.log('MainPage: Generated Authenticated URL', targetUrl);
+      return targetUrl;
     } 
     
     if (isVerifying && emailForVerification) {

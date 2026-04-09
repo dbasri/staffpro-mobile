@@ -141,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   const login = useCallback((sessionData: UserSession) => {
+    console.log('AuthProvider: Logging in session', sessionData.session);
     setUser(sessionData);
     setAuthError(null);
     try {
@@ -150,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    console.log('AuthProvider: Executing logout and clearing state');
     try {
       localStorage.removeItem(SESSION_STORAGE_KEY);
       sessionStorage.removeItem(NEW_LOGIN_KEY);
@@ -176,11 +178,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (!data || typeof data !== 'object') return;
 
+      console.log('AuthProvider: Received message', data);
+
       const status = (data.status || data.Status || '').toString().toLowerCase();
       const purpose = (data.purpose || data.Purpose || '').toString().toLowerCase();
       
       // DETECT LOGOFF SIGNALS FROM SERVER JSON
-      // Handles: {"status":"success", ..., "purpose":"logoff"}
       const isLogoffSignal = 
         status === 'logoff' || 
         status === 'fail' || 
@@ -191,12 +194,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data.logout === true;
 
       if (isLogoffSignal) {
+        console.log('AuthProvider: Detected logoff signal. Triggering logout.');
         logout();
         return;
       }
 
       // DETECTION OF SUCCESSFUL AUTHENTICATION
       if (status === 'success' && purpose === 'authenticated') {
+        console.log('AuthProvider: Detected successful authentication signal.');
         const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
         const session = data.session || 'passkey-session';
         login({ ...data, email, session });
@@ -214,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const session = JSON.parse(sessionString);
         const statusLower = (session.status || session.Status || '').toLowerCase();
         if (statusLower === 'success') {
+          console.log('AuthProvider: Restored session from storage');
           setUser(session);
         }
       }
