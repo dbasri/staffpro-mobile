@@ -165,7 +165,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleServerMessage = (event: MessageEvent) => {
       let data = event.data;
       
-      // Handle both string and object data types from postMessage
+      // DIAGNOSTIC 1: Message received
+      // toast({ title: "DEBUG: Message Received", description: "Payload detected from server..." });
+      
       if (typeof data === 'string') {
         try {
           const start = data.indexOf('{');
@@ -178,11 +180,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (!data || typeof data !== 'object') return;
 
-      console.log('AuthProvider: Received message', data);
-
       const status = (data.status || data.Status || '').toString().toLowerCase();
       const purpose = (data.purpose || data.Purpose || '').toString().toLowerCase();
       
+      // DIAGNOSTIC 2: Parsed properties
+      if (status || purpose) {
+        console.log('AuthProvider: Parsed message', { status, purpose });
+      }
+
       // DETECT LOGOFF SIGNALS FROM SERVER JSON
       const isLogoffSignal = 
         status === 'logoff' || 
@@ -194,14 +199,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data.logout === true;
 
       if (isLogoffSignal) {
-        console.log('AuthProvider: Detected logoff signal. Triggering logout.');
+        toast({ title: "DEBUG: Logoff Detected", description: "Server requested UI reset." });
         logout();
         return;
       }
 
       // DETECTION OF SUCCESSFUL AUTHENTICATION
       if (status === 'success' && purpose === 'authenticated') {
-        console.log('AuthProvider: Detected successful authentication signal.');
+        toast({ title: "DEBUG: Auth Success", description: "Session activated." });
         const email = data.email || localStorage.getItem(EMAIL_STORAGE_KEY) || '';
         const session = data.session || 'passkey-session';
         login({ ...data, email, session });
@@ -210,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener('message', handleServerMessage);
     return () => window.removeEventListener('message', handleServerMessage);
-  }, [login, logout]);
+  }, [login, logout, toast]);
 
   useEffect(() => {
     try {
